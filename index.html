@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asana Workflow Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242736;
+    --border: #2d3148;
+    --text: #e1e4ed;
+    --text2: #8b90a5;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --orange: #f59e0b;
+    --blue: #3b82f6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); cursor: pointer;
+    font-size: 13px; font-weight: 500; transition: all 0.15s;
+  }
+  .btn:hover { background: var(--border); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-ai { background: #8b5cf6; border-color: #8b5cf6; color: #fff; }
+  .btn-ai:hover { background: #7c3aed; }
+  .btn-sync { background: var(--green); border-color: var(--green); color: #000; }
+  .btn-sync:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.loading { background: var(--orange); animation: pulse 1s infinite; }
+  .status-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* Layout */
+  .main { display: flex; gap: 0; height: calc(100vh - 57px); }
+  .sidebar {
+    width: 280px; min-width: 280px; border-right: 1px solid var(--border);
+    background: var(--surface); padding: 16px; overflow-y: auto;
+  }
+  .content { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* Sidebar clusters */
+  .sidebar h3 { font-size: 12px; text-transform: uppercase; color: var(--text2); margin-bottom: 12px; letter-spacing: 0.5px; }
+  .cluster-card {
+    padding: 12px; border-radius: 8px; background: var(--surface2);
+    border: 1px solid var(--border); margin-bottom: 8px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .cluster-card:hover, .cluster-card.active { border-color: var(--accent); }
+  .cluster-card .name { font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .cluster-card .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .cluster-card .stats { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .cluster-card .count {
+    background: var(--surface); padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 600; margin-left: auto;
+  }
+
+  /* Chart */
+  .chart-container { margin: 16px 0; padding: 12px; background: var(--surface2); border-radius: 8px; }
+  .chart-container canvas { max-height: 160px; }
+
+  /* View tabs */
+  .view-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .view-tab {
+    padding: 6px 14px; border-radius: 6px; font-size: 13px;
+    cursor: pointer; background: transparent; color: var(--text2);
+    border: none; transition: all 0.15s;
+  }
+  .view-tab.active { background: var(--surface2); color: var(--text); }
+
+  /* Task cards */
+  .task-grid { display: flex; flex-direction: column; gap: 8px; }
+  .task-card {
+    padding: 14px 16px; border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--border); transition: all 0.15s;
+  }
+  .task-card:hover { border-color: var(--accent); }
+  .task-header { display: flex; align-items: flex-start; gap: 10px; }
+  .task-name {
+    font-size: 14px; font-weight: 500; flex: 1; line-height: 1.4;
+    cursor: pointer; text-decoration: none; color: var(--text);
+  }
+  .task-name:hover { color: var(--accent2); }
+  .task-badges { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+  .badge {
+    padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-scope { background: var(--accent); color: #fff; }
+  .badge-scope.s1 { background: #22c55e; }
+  .badge-scope.s2 { background: #3b82f6; }
+  .badge-scope.s3 { background: #f59e0b; color: #000; }
+  .badge-scope.s4 { background: #f97316; }
+  .badge-scope.s5 { background: #ef4444; }
+  .badge-priority {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text2); min-width: 24px; text-align: center;
+  }
+  .badge-cluster { font-size: 10px; padding: 2px 6px; border-radius: 3px; color: #fff; }
+  .badge-tipo { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+  .task-meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+  .task-notes {
+    font-size: 12px; color: var(--text2); margin-top: 6px;
+    line-height: 1.4; max-height: 40px; overflow: hidden;
+  }
+  .task-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--surface2); color: var(--text2); }
+
+  /* Editable selects */
+  .inline-select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 4px; padding: 2px 4px; font-size: 11px; cursor: pointer;
+  }
+
+  /* Table view */
+  .task-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .task-table th {
+    text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase;
+    color: var(--text2); border-bottom: 1px solid var(--border); cursor: pointer;
+    user-select: none;
+  }
+  .task-table th:hover { color: var(--text); }
+  .task-table td { padding: 10px; border-bottom: 1px solid var(--border); }
+  .task-table tr:hover td { background: var(--surface2); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+    border-radius: 8px; font-size: 13px; z-index: 100;
+    animation: slideIn 0.3s ease;
+  }
+  .toast.success { background: var(--green); color: #000; }
+  .toast.error { background: var(--red); color: #fff; }
+  @keyframes slideIn { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+  /* Summary bar */
+  .summary-bar {
+    display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .summary-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; min-width: 120px;
+  }
+  .summary-item .label { font-size: 11px; color: var(--text2); text-transform: uppercase; }
+  .summary-item .value { font-size: 24px; font-weight: 700; margin-top: 2px; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Asana Workflow Dashboard</h1>
+  <div class="header-actions">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText" style="font-size:12px;color:var(--text2)">Ready</span>
+    <button class="btn" onclick="fetchTasks()" id="refreshBtn">Refresh</button>
+    <button class="btn btn-ai" onclick="aiClassifyAll()" id="aiBtn">AI Classify All</button>
+    <button class="btn btn-sync" onclick="syncToAsana()" id="syncBtn">Sync to Asana</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <h3>Clusters</h3>
+    <div id="clusterList"></div>
+    <div class="chart-container">
+      <canvas id="scopeChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <canvas id="clusterChart"></canvas>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="view-tabs">
+      <button class="view-tab active" onclick="setView('cards', this)">Cards</button>
+      <button class="view-tab" onclick="setView('table', this)">Table</button>
+      <button class="view-tab" onclick="setView('cluster', this)">By Cluster</button>
+    </div>
+    <div id="taskContainer"></div>
+  </div>
+</div>
+
+<script>
+let allTasks = [];
+let activeCluster = null;
+let currentView = 'cards';
+let scopeChart = null;
+let clusterChart = null;
+let sortField = 'priority';
+let sortDir = -1;
+
+const CLUSTERS_META = {
+  ebitda: { name: 'EBITDA Reports', color: '#e74c3c' },
+  trazabilidad: { name: 'Trazabilidad', color: '#9b59b6' },
+  turnos: { name: 'Planificacion Turnos', color: '#3498db' },
+  pedidos: { name: 'Pedidos / Albaranes', color: '#f39c12' },
+  almacen: { name: 'Almacen', color: '#1abc9c' },
+  sentry: { name: 'Sentry', color: '#95a5a6' },
+  integracion: { name: 'Integraciones', color: '#e67e22' },
+  standalone: { name: 'Standalone', color: '#7f8c8d' },
+};
+
+async function fetchTasks() {
+  setStatus('loading', 'Fetching...');
+  document.getElementById('refreshBtn').disabled = true;
+  try {
+    const resp = await fetch('/api/tasks');
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    allTasks = data.tasks;
+    render();
+    setStatus('ok', `${data.count} tasks loaded`);
+  } catch (e) {
+    setStatus('error', e.message);
+    showToast('Error: ' + e.message, 'error');
+  }
+  document.getElementById('refreshBtn').disabled = false;
+}
+
+async function syncToAsana() {
+  if (!confirm('Push scope scores to Asana Story Point field?')) return;
+  setStatus('loading', 'Syncing...');
+  document.getElementById('syncBtn').disabled = true;
+  try {
+    const resp = await fetch('/api/sync', { method: 'POST' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    showToast(`Synced ${data.synced} tasks. ${data.errors} errors.`, data.errors > 0 ? 'error' : 'success');
+    setStatus('ok', 'Synced');
+  } catch (e) {
+    setStatus('error', e.message);
+    showToast('Sync failed: ' + e.message, 'error');
+  }
+  document.getElementById('syncBtn').disabled = false;
+}
+
+async function updateTask(gid, field, value) {
+  const body = {};
+  body[field] = parseInt(value);
+  try {
+    await fetch(`/api/tasks/${gid}/classify`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    // Update local
+    const task = allTasks.find(t => t.task_gid === gid);
+    if (task) task[field] = parseInt(value);
+    render();
+  } catch (e) {
+    showToast('Update failed', 'error');
+  }
+}
+
+function getFilteredTasks() {
+  let tasks = [...allTasks];
+  if (activeCluster) tasks = tasks.filter(t => t.cluster.id === activeCluster);
+  tasks.sort((a, b) => {
+    const av = a[sortField] ?? 0, bv = b[sortField] ?? 0;
+    return (av - bv) * sortDir;
+  });
+  return tasks;
+}
+
+function render() {
+  renderSidebar();
+  renderSummary();
+  renderTasks();
+  renderCharts();
+}
+
+function renderSidebar() {
+  const groups = {};
+  allTasks.forEach(t => {
+    const cid = t.cluster.id;
+    if (!groups[cid]) groups[cid] = { ...t.cluster, count: 0, totalScope: 0 };
+    groups[cid].count++;
+    groups[cid].totalScope += t.scope_score;
+  });
+
+  let html = `<div class="cluster-card ${!activeCluster ? 'active' : ''}" onclick="filterCluster(null)">
+    <div class="name"><span class="dot" style="background:var(--accent)"></span>All Tasks<span class="count">${allTasks.length}</span></div>
+  </div>`;
+
+  Object.values(groups).sort((a,b) => b.count - a.count).forEach(c => {
+    const avg = (c.totalScope / c.count).toFixed(1);
+    html += `<div class="cluster-card ${activeCluster === c.id ? 'active' : ''}" onclick="filterCluster('${c.id}')">
+      <div class="name"><span class="dot" style="background:${c.color}"></span>${esc(c.name)}<span class="count">${c.count}</span></div>
+      <div class="stats">Avg scope: ${avg}</div>
+    </div>`;
+  });
+  document.getElementById('clusterList').innerHTML = html;
+}
+
+function renderSummary() {
+  const tasks = getFilteredTasks();
+  const errors = tasks.filter(t => t.tipo === 'Error').length;
+  const mejoras = tasks.filter(t => t.tipo === 'Mejora').length;
+  const avgScope = tasks.length ? (tasks.reduce((s,t) => s + t.scope_score, 0) / tasks.length).toFixed(1) : 0;
+  const avgPriority = tasks.length ? (tasks.reduce((s,t) => s + t.priority, 0) / tasks.length).toFixed(1) : 0;
+  const quickWins = tasks.filter(t => t.scope_score <= 2 && t.priority >= 7).length;
+
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="summary-item"><div class="label">Tasks</div><div class="value">${tasks.length}</div></div>
+    <div class="summary-item"><div class="label">Errors</div><div class="value" style="color:var(--red)">${errors}</div></div>
+    <div class="summary-item"><div class="label">Mejoras</div><div class="value" style="color:var(--blue)">${mejoras}</div></div>
+    <div class="summary-item"><div class="label">Avg Scope</div><div class="value">${avgScope}</div></div>
+    <div class="summary-item"><div class="label">Avg Priority</div><div class="value">${avgPriority}</div></div>
+    <div class="summary-item"><div class="label">Quick Wins</div><div class="value" style="color:var(--green)">${quickWins}</div></div>
+  `;
+}
+
+function renderTasks() {
+  const tasks = getFilteredTasks();
+  const container = document.getElementById('taskContainer');
+  if (!tasks.length) { container.innerHTML = '<div class="empty-state">No tasks found</div>'; return; }
+
+  if (currentView === 'table') { renderTable(tasks, container); return; }
+  if (currentView === 'cluster') { renderByCluster(tasks, container); return; }
+  renderCards(tasks, container);
+}
+
+function renderCards(tasks, container) {
+  container.innerHTML = '<div class="task-grid">' + tasks.map(t => taskCard(t)).join('') + '</div>';
+}
+
+function renderTable(tasks, container) {
+  const cols = [
+    { key: 'priority', label: 'P' },
+    { key: 'scope_score', label: 'Scope' },
+    { key: 'name', label: 'Task' },
+    { key: 'cluster', label: 'Cluster' },
+    { key: 'tipo', label: 'Type' },
+    { key: 'area', label: 'Area' },
+  ];
+  let html = '<table class="task-table"><thead><tr>';
+  cols.forEach(c => {
+    const arrow = sortField === c.key ? (sortDir === -1 ? ' ▼' : ' ▲') : '';
+    html += `<th onclick="sortBy('${c.key}')">${c.label}${arrow}</th>`;
+  });
+  html += '<th>Actions</th></tr></thead><tbody>';
+  tasks.forEach(t => {
+    html += `<tr>
+      <td><span class="badge badge-priority">${t.priority}</span></td>
+      <td><span class="badge badge-scope s${t.scope_score}">S${t.scope_score}</span></td>
+      <td><a class="task-name" href="${t.permalink_url}" target="_blank">${esc(t.name)}</a></td>
+      <td><span class="badge badge-cluster" style="background:${t.cluster.color}">${esc(t.cluster.name)}</span></td>
+      <td><span class="badge badge-tipo">${esc(t.tipo)}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${esc(t.area)}</td>
+      <td>
+        <select class="inline-select" onchange="updateTask('${t.task_gid}','scope_score',this.value)">
+          ${[1,2,3,4,5].map(s => `<option value="${s}" ${s===t.scope_score?'selected':''}>S${s}</option>`).join('')}
+        </select>
+        <select class="inline-select" onchange="updateTask('${t.task_gid}','priority',this.value)">
+          ${Array.from({length:10},(_,i)=>i+1).map(p => `<option value="${p}" ${p===t.priority?'selected':''}>P${p}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function renderByCluster(tasks, container) {
+  const groups = {};
+  tasks.forEach(t => {
+    const cid = t.cluster.id;
+    if (!groups[cid]) groups[cid] = { ...t.cluster, tasks: [] };
+    groups[cid].tasks.push(t);
+  });
+
+  let html = '';
+  Object.values(groups).sort((a,b) => b.tasks.length - a.tasks.length).forEach(g => {
+    html += `<div style="margin-bottom:24px">
+      <h3 style="font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+        <span class="dot" style="background:${g.color};width:10px;height:10px;border-radius:50%;display:inline-block"></span>
+        ${esc(g.name)} <span style="color:var(--text2);font-size:13px">(${g.tasks.length})</span>
+      </h3>
+      <div class="task-grid">${g.tasks.map(t => taskCard(t)).join('')}</div>
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function taskCard(t) {
+  return `<div class="task-card">
+    <div class="task-header">
+      <a class="task-name" href="${t.permalink_url}" target="_blank">${esc(t.name)}</a>
+      <div class="task-badges">
+        <span class="badge badge-cluster" style="background:${t.cluster.color}">${esc(t.cluster.name)}</span>
+        <span class="badge badge-tipo">${esc(t.tipo)}</span>
+        <select class="inline-select" onchange="updateTask('${t.task_gid}','scope_score',this.value)" title="Scope Score">
+          ${[1,2,3,4,5].map(s => `<option value="${s}" ${s===t.scope_score?'selected':''}>S${s}</option>`).join('')}
+        </select>
+        <select class="inline-select" onchange="updateTask('${t.task_gid}','priority',this.value)" title="Priority">
+          ${Array.from({length:10},(_,i)=>i+1).map(p => `<option value="${p}" ${p===t.priority?'selected':''}>P${p}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    ${t.notes_preview ? `<div class="task-notes">${esc(t.notes_preview)}</div>` : ''}
+    <div class="task-tags">
+      ${t.tags.map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}
+      ${t.desarrollador && t.desarrollador !== 'N/A' ? `<span class="tag" style="border:1px solid var(--accent);color:var(--accent)">${esc(t.desarrollador)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderCharts() {
+  // Scope distribution
+  const scopeCounts = [0,0,0,0,0];
+  allTasks.forEach(t => scopeCounts[t.scope_score - 1]++);
+
+  if (scopeChart) scopeChart.destroy();
+  scopeChart = new Chart(document.getElementById('scopeChart'), {
+    type: 'bar',
+    data: {
+      labels: ['S1 Tiny','S2 Small','S3 Med','S4 Large','S5 XL'],
+      datasets: [{ data: scopeCounts, backgroundColor: ['#22c55e','#3b82f6','#f59e0b','#f97316','#ef4444'], borderRadius: 4 }]
+    },
+    options: {
+      plugins: { legend: { display: false }, title: { display: true, text: 'Scope Distribution', color: '#8b90a5', font: { size: 11 } } },
+      scales: { x: { ticks: { color: '#8b90a5', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#8b90a5', stepSize: 1 }, grid: { color: '#2d3148' } } }
+    }
+  });
+
+  // Cluster pie
+  const clusterData = {};
+  allTasks.forEach(t => {
+    const cid = t.cluster.id;
+    if (!clusterData[cid]) clusterData[cid] = { label: t.cluster.name, color: t.cluster.color, count: 0 };
+    clusterData[cid].count++;
+  });
+  const cds = Object.values(clusterData);
+
+  if (clusterChart) clusterChart.destroy();
+  clusterChart = new Chart(document.getElementById('clusterChart'), {
+    type: 'doughnut',
+    data: {
+      labels: cds.map(c => c.label),
+      datasets: [{ data: cds.map(c => c.count), backgroundColor: cds.map(c => c.color) }]
+    },
+    options: {
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#8b90a5', font: { size: 10 }, boxWidth: 10 } },
+        title: { display: true, text: 'Clusters', color: '#8b90a5', font: { size: 11 } }
+      }
+    }
+  });
+}
+
+function filterCluster(id) {
+  activeCluster = id;
+  render();
+}
+
+function setView(view, el) {
+  currentView = view;
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderTasks();
+}
+
+function sortBy(field) {
+  if (sortField === field) sortDir *= -1;
+  else { sortField = field; sortDir = -1; }
+  renderTasks();
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot ' + state;
+  document.getElementById('statusText').textContent = text;
+}
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+// Init
+fetchTasks();
+</script>
+</body>
+</html>

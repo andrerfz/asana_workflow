@@ -1,0 +1,13 @@
+services:
+  asana-workflow:
+    build: .
+    container_name: asana-workflow
+    ports:
+      - "8765:8765"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./classifier.py:/app/classifier.py
+      - ./index.html:/app/index.html
+    restart: unless-stopped
