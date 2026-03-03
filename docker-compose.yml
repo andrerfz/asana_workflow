@@ -9,5 +9,12 @@ services:
     volumes:
       - ./data:/app/data
       - ./classifier.py:/app/classifier.py
-      - ./index.html:/app/index.html
+      - ./ai_classifier.py:/app/ai_classifier.py
+      - ./config.py:/app/config.py
+      - ./asana_client.py:/app/asana_client.py
+      - ./storage.py:/app/storage.py
+      - ./task_cache.py:/app/task_cache.py
+      - ./main.py:/app/main.py
+      - ./routes:/app/routes
+      - ./static:/app/static
     restart: unless-stopped

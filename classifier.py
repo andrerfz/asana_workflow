@@ -208,9 +208,23 @@ def compute_priority(task: dict, cluster: dict, scope: int) -> int:
     if canal == "Cliente":
         priority += 1
 
+    # Data integrity in reports = maximum priority
+    name = task.get("name") or ""
+    is_data_error = tipo == "Error" and any(
+        kw in name.lower() for kw in [
+            "no coinciden", "incorrecto", "no es correcto",
+            "no aparecen", "no muestra", "valor de las compras",
+        ]
+    )
+    is_report_cluster = cluster["id"] in ("ebitda", "trazabilidad")
+    if is_data_error and is_report_cluster:
+        priority += 3  # Data errors in reports = P10
+
     # High-value clusters
     if cluster["id"] == "ebitda":
         priority += 2  # Financial reports = critical
+    elif cluster["id"] in ("trazabilidad",):
+        priority += 1  # Traceability = compliance
     elif cluster["id"] in ("turnos", "pedidos"):
         priority += 1  # Operational
 
@@ -222,6 +236,22 @@ def compute_priority(task: dict, cluster: dict, scope: int) -> int:
     # Inverse relationship with scope for errors (small fix = quick win = do first)
     if tipo == "Error" and scope <= 2:
         priority += 1  # Quick wins first
+
+    # Due date urgency: tasks with deadlines get priority boost
+    due_on = task.get("due_on")
+    if due_on:
+        try:
+            from datetime import date
+            due = date.fromisoformat(due_on)
+            days_left = (due - date.today()).days
+            if days_left < 0:
+                priority += 3  # Overdue
+            elif days_left <= 2:
+                priority += 2  # Due in 2 days or less
+            elif days_left <= 7:
+                priority += 1  # Due this week
+        except (ValueError, TypeError):
+            pass
 
     return max(1, min(10, priority))
 
@@ -236,6 +266,19 @@ def classify_task(task: dict) -> dict:
     scope = compute_scope_score(task)
     priority = compute_priority(task, cluster, scope)
 
+    # Section: prefer _section_name (tagged at fetch time from our project)
+    section_name = task.get("_section_name", "Unassigned")
+
+    # Extract projects from memberships
+    projects = []
+    for m in task.get("memberships", []):
+        proj = m.get("project", {})
+        proj_name = proj.get("name", "")
+        if proj_name and "My Tasks" not in proj_name:
+            projects.append(proj_name)
+    # Deduplicate
+    projects = list(dict.fromkeys(projects))
+
     return {
         "task_gid": task["gid"],
         "name": name,
@@ -246,7 +289,10 @@ def classify_task(task: dict) -> dict:
         "tipo": _get_custom_field(task, "Tipo") or "N/A",
         "canal": _get_custom_field(task, "Canal") or "N/A",
         "desarrollador": _get_custom_field(task, "Desarrollador") or "N/A",
+        "projects": projects,
+        "section_name": section_name,
         "tags": [t.get("name", "") for t in task.get("tags", [])],
+        "notes": notes,
         "notes_preview": notes[:200] + ("..." if len(notes) > 200 else ""),
         "permalink_url": task.get("permalink_url", ""),
         "due_on": task.get("due_on"),

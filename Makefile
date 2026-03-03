@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs shell clean dev setup
+.PHONY: help build up down restart recreate logs shell clean dev setup
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -7,12 +7,32 @@ help: ## Show this help
 
 build: ## Build the Docker image
 	docker compose build
+	@echo ""
+	@echo "\033[1;32m  Build complete. Run: make up\033[0m"
+	@echo ""
 
 up: ## Start the container (detached)
 	docker compose up -d
+	@echo ""
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo "\033[1;32m  Dashboard running at:\033[0m"
+	@echo "\033[1;36m  http://localhost:8765\033[0m"
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo ""
 
 down: ## Stop the container
 	docker compose down
+
+recreate: ## Full rebuild: stop, build, start
+	docker compose down
+	docker compose build
+	docker compose up -d
+	@echo ""
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo "\033[1;32m  Dashboard rebuilt and running at:\033[0m"
+	@echo "\033[1;36m  http://localhost:8765\033[0m"
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo ""
 
 restart: ## Restart the container
 	docker compose restart
@@ -26,7 +46,13 @@ shell: ## Open a shell inside the container
 # --- Development ---
 
 dev: ## Run locally without Docker (hot reload)
-	uvicorn server:app --host 127.0.0.1 --port 8765 --reload
+	@echo ""
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo "\033[1;32m  Dashboard starting at:\033[0m"
+	@echo "\033[1;36m  http://localhost:8765\033[0m"
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo ""
+	uvicorn main:app --host 127.0.0.1 --port 8765 --reload
 
 setup: ## First-time setup: copy .env, install deps, create data dir
 	@test -f .env || cp .env.example .env

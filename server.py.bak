@@ -32,7 +32,7 @@ DATA_FILE = Path(__file__).parent / "data" / "classifications.json"
 TASK_OPT_FIELDS = ",".join([
     "name", "notes", "assignee.name", "due_on", "completed",
     "tags.name", "custom_fields.name", "custom_fields.display_value",
-    "permalink_url", "memberships.section.name",
+    "permalink_url", "memberships.section.name", "memberships.project.name",
 ])
 
 app = FastAPI(title="Asana Workflow Dashboard")
@@ -133,12 +133,19 @@ async def get_tasks():
                 result["priority"] = ov["priority"]
             if "ai_reasoning" in ov:
                 result["ai_reasoning"] = ov["ai_reasoning"]
+            if "ai_summary" in ov:
+                result["ai_summary"] = ov["ai_summary"]
             if "source" in ov:
                 result["classification_source"] = ov["source"]
         classified.append(result)
 
-    # Sort by priority desc, then scope asc
+    # Sort by priority desc, then scope asc (quick wins first within same priority)
     classified.sort(key=lambda t: (-t["priority"], t["scope_score"]))
+
+    # Assign unique sequential rank: #1 = do first
+    for i, task in enumerate(classified):
+        task["rank"] = i + 1
+
     return {"tasks": classified, "count": len(classified)}
 
 
@@ -254,6 +261,7 @@ async def ai_classify_all(force: bool = False):
             "cluster_id": classification["cluster_id"],
             "cluster_name": classification.get("cluster_name", ""),
             "ai_reasoning": classification.get("reasoning", ""),
+            "ai_summary": classification.get("summary", ""),
             "source": "ai",
         }
         applied += 1
@@ -312,6 +320,106 @@ async def ai_status():
         "available": bool(api_key),
         "model": os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
     }
+
+
+# --- History Routes ---
+
+HISTORY_FILE = Path(__file__).parent / "data" / "history.json"
+
+
+def _load_history() -> list:
+    if HISTORY_FILE.exists():
+        try:
+            return json.loads(HISTORY_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            return []
+    return []
+
+
+def _save_history(history: list):
+    HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    HISTORY_FILE.write_text(json.dumps(history, indent=2, ensure_ascii=False))
+
+
+@app.post("/api/history/snapshot")
+async def take_snapshot():
+    """Save current state of all tasks as a history snapshot."""
+    from datetime import datetime, timezone
+    raw_tasks = await _fetch_tasks()
+    local_data = _load_local_data()
+    overrides = local_data.get("overrides", {})
+
+    snapshot = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "tasks": [],
+    }
+    for task in raw_tasks:
+        gid = task["gid"]
+        result = classify_task(task)
+        if gid in overrides:
+            ov = overrides[gid]
+            if "scope_score" in ov:
+                result["scope_score"] = ov["scope_score"]
+            if "cluster_id" in ov:
+                result["cluster"]["id"] = ov["cluster_id"]
+            if "priority" in ov:
+                result["priority"] = ov["priority"]
+        snapshot["tasks"].append({
+            "gid": gid,
+            "name": task.get("name", ""),
+            "completed": task.get("completed", False),
+            "tipo": result.get("tipo", "N/A"),
+            "cluster": result["cluster"]["id"],
+            "scope_score": result["scope_score"],
+            "priority": result["priority"],
+            "tags": [t.get("name", "") for t in task.get("tags", [])],
+        })
+
+    history = _load_history()
+    history.append(snapshot)
+    # Keep last 100 snapshots
+    if len(history) > 100:
+        history = history[-100:]
+    _save_history(history)
+    return {"status": "ok", "snapshot_count": len(history), "tasks_in_snapshot": len(snapshot["tasks"])}
+
+
+@app.get("/api/history")
+async def get_history():
+    """Get task history snapshots."""
+    history = _load_history()
+    return {"snapshots": history, "count": len(history)}
+
+
+@app.get("/api/scope-config")
+async def get_scope_config():
+    """Get configurable scope definitions."""
+    local_data = _load_local_data()
+    defaults = {
+        "1": {"label": "Tiny", "description": "Single query fix, filter bug, one-line change", "color": "#22c55e"},
+        "2": {"label": "Small", "description": "Single file logic fix, simple UI tweak", "color": "#3b82f6"},
+        "3": {"label": "Medium", "description": "Multi-file change, API + frontend coordination", "color": "#f59e0b"},
+        "4": {"label": "Large", "description": "New endpoint with logic + tests, significant refactor", "color": "#f97316"},
+        "5": {"label": "XL", "description": "Cross-system feature, database migration, new module", "color": "#ef4444"},
+    }
+    return local_data.get("scope_config", defaults)
+
+
+class ScopeConfig(BaseModel):
+    label: str
+    description: str
+    color: str
+
+
+@app.put("/api/scope-config/{level}")
+async def update_scope_config(level: str, body: ScopeConfig):
+    """Update scope definition for a level."""
+    local_data = _load_local_data()
+    config = local_data.setdefault("scope_config", {})
+    config[level] = {"label": body.label, "description": body.description, "color": body.color}
+    local_data["scope_config"] = config
+    _save_local_data(local_data)
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":

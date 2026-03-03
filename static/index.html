@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asana Workflow Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="header">
+  <h1>Asana Workflow Dashboard</h1>
+  <div class="header-actions">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText" style="font-size:12px;color:var(--text2)">Ready</span>
+    <button class="btn" onclick="fetchTasks(true)" id="refreshBtn">Refresh</button>
+    <button class="btn btn-ai" onclick="aiClassifyAll()" id="aiBtn">AI Classify All</button>
+    <button class="btn btn-sync" onclick="syncToAsana()" id="syncBtn">Sync to Asana</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar" id="sidebar">
+    <div class="resize-handle" id="resizeHandle"></div>
+    <h3>Clusters</h3>
+    <div id="clusterList"></div>
+    <div class="chart-container">
+      <canvas id="scopeChart"></canvas>
+    </div>
+    <div class="chart-container">
+      <canvas id="clusterChart"></canvas>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="view-tabs">
+      <button class="view-tab active" onclick="setView('cards', this)">Cards</button>
+      <button class="view-tab" onclick="setView('table', this)">Table</button>
+      <button class="view-tab" onclick="setView('cluster', this)">By Cluster</button>
+      <button class="view-tab" onclick="setView('history', this)">History</button>
+      <div class="type-filters">
+        <button class="type-pill" onclick="filterType(null, this)">All</button>
+        <button class="type-pill" onclick="filterType('Error', this)">Error</button>
+        <button class="type-pill" onclick="filterType('Mejora', this)">Mejora</button>
+        <button class="type-pill" onclick="filterType('Otros', this)">Otros</button>
+      </div>
+    </div>
+    <div id="taskContainer"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
