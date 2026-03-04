@@ -190,19 +190,17 @@ def compute_scope_score(task: dict) -> int:
 
 def compute_priority(task: dict, cluster: dict, scope: int) -> int:
     """
-    Compute priority 1-10 (10=highest urgency).
-    Factors: type, client impact, cluster importance, scope.
+    Compute priority 1-5 (5=most urgent).
+    1=Lowest, 2=Low, 3=Normal, 4=High, 5=Critical.
     """
-    priority = 5  # baseline
+    priority = 3  # baseline = Normal
     tipo = _get_custom_field(task, "Tipo")
     canal = _get_custom_field(task, "Canal")
     tags = task.get("tags", [])
 
     # Error > Mejora > Otros
     if tipo == "Error":
-        priority += 2
-    elif tipo == "Mejora":
-        priority += 0
+        priority += 1
 
     # Client-reported = higher urgency
     if canal == "Cliente":
@@ -218,15 +216,13 @@ def compute_priority(task: dict, cluster: dict, scope: int) -> int:
     )
     is_report_cluster = cluster["id"] in ("ebitda", "trazabilidad")
     if is_data_error and is_report_cluster:
-        priority += 3  # Data errors in reports = P10
+        priority = 5  # Data errors in reports = always Critical
 
     # High-value clusters
     if cluster["id"] == "ebitda":
-        priority += 2  # Financial reports = critical
+        priority += 1  # Financial reports
     elif cluster["id"] in ("trazabilidad",):
         priority += 1  # Traceability = compliance
-    elif cluster["id"] in ("turnos", "pedidos"):
-        priority += 1  # Operational
 
     # Multiple clients
     client_tags = [t for t in tags if t.get("name", "").startswith("Cliente:")]
@@ -245,15 +241,13 @@ def compute_priority(task: dict, cluster: dict, scope: int) -> int:
             due = date.fromisoformat(due_on)
             days_left = (due - date.today()).days
             if days_left < 0:
-                priority += 3  # Overdue
+                priority += 1  # Overdue
             elif days_left <= 2:
-                priority += 2  # Due in 2 days or less
-            elif days_left <= 7:
-                priority += 1  # Due this week
+                priority += 1  # Due soon
         except (ValueError, TypeError):
             pass
 
-    return max(1, min(10, priority))
+    return max(1, min(5, priority))
 
 
 def classify_task(task: dict) -> dict:

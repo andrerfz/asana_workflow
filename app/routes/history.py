@@ -2,9 +2,9 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter
 
-from asana_client import fetch_tasks
-from classifier import classify_task
-from storage import load_overrides, load_history, save_history, load_resolved, save_resolved
+from ..services.asana_client import fetch_tasks
+from ..services.classifier import classify_task
+from ..services.storage import load_overrides, load_history, save_history, load_resolved, save_resolved
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 

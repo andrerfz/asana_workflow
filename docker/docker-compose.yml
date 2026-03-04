@@ -1,0 +1,34 @@
+services:
+  asana-workflow:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: asana-workflow
+    ports:
+      - "8765:8765"
+    environment:
+      # Only pass PROJECTS_DIR for volume mount path — all other config
+      # is read by python-dotenv from .env file inside the container.
+      # NOT using env_file: to avoid poisoning Claude CLI with ANTHROPIC_API_KEY.
+      - PROJECTS_DIR=${PROJECTS_DIR}
+      # Claude Code CLI auth token (headless OAuth, valid 1 year)
+      # Generate with: claude setup-token
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+    volumes:
+      - ../.env:/app/.env:ro
+      - ../data:/app/data
+      - ../app:/app/app
+      - ../tests:/app/tests
+      # Agent feature: mount projects dir at same path so IDE paths match
+      - ${PROJECTS_DIR}:${PROJECTS_DIR}
+      # Claude Code CLI config — NOT read-only: CLI needs to write session/cache data
+      - ~/.claude:/home/agent/.claude
+      - ~/.claude.json:/home/agent/.claude.json:ro
+      # SSH keys for git fetch/push over SSH
+      - ~/.ssh:/home/agent/.ssh:ro
+      # Docker socket — lets agent run tests inside project containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Agent user needs docker group access for socket
+    group_add:
+      - "${DOCKER_GID:-0}"
+    restart: unless-stopped

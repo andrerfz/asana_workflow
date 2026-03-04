@@ -2,10 +2,10 @@
 import os
 from fastapi import APIRouter, HTTPException
 
-from asana_client import fetch_tasks
-from ai_classifier import ai_classify_task, ai_classify_batch, clear_cache
-from storage import load_overrides, save_overrides
-from task_cache import refresh_cache
+from ..services.asana_client import fetch_tasks
+from ..services.ai_classifier import ai_classify_task, ai_classify_batch, clear_cache
+from ..services.storage import load_overrides, save_overrides
+from ..services.task_cache import refresh_cache
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -25,6 +25,7 @@ async def ai_classify_all(force: bool = False):
             "priority": classification["priority"],
             "cluster_id": classification["cluster_id"],
             "cluster_name": classification.get("cluster_name", ""),
+            "area": classification.get("area", "other"),
             "ai_reasoning": classification.get("reasoning", ""),
             "ai_summary": classification.get("summary", ""),
             "source": "ai",
@@ -55,6 +56,7 @@ async def ai_classify_single(task_gid: str, force: bool = False):
         "priority": result["priority"],
         "cluster_id": result["cluster_id"],
         "cluster_name": result.get("cluster_name", ""),
+        "area": result.get("area", "other"),
         "ai_reasoning": result.get("reasoning", ""),
         "ai_summary": result.get("summary", ""),
         "source": "ai",
@@ -69,7 +71,7 @@ async def ai_classify_single(task_gid: str, force: bool = False):
 async def generate_branch_name(task_gid: str):
     """Generate a short English branch slug from task name using AI. Cached in overrides."""
     import httpx
-    from config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CLAUDE_MODEL
+    from ..config import ANTHROPIC_API_KEY, ANTHROPIC_BASE, CLAUDE_MODEL
 
     # Check cache first
     local_data = load_overrides()
