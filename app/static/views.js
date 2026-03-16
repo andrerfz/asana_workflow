@@ -1,44 +1,13 @@
-let allTasks = [];
-let allSections = [];
+// ════════ DATA FETCHING ════════
 
-// Restore filters from localStorage
-const _saved = JSON.parse(localStorage.getItem('dashFilters') || '{}');
-let activeCluster = _saved.cluster || null;
-let activeProject = _saved.project || null;
-let activeSection = _saved.section !== undefined ? _saved.section : null;
-let currentView = _saved.view || 'cards';
-let scopeChart = null;
-let clusterChart = null;
-let velocityChart = null;
-let sortField = _saved.sortField || 'priority';
-let sortDir = _saved.sortDir ?? -1;
-let activeType = _saved.type || null;
-
-function _saveFilters() {
-  localStorage.setItem('dashFilters', JSON.stringify({
-    cluster: activeCluster,
-    project: activeProject,
-    section: activeSection,
-    view: currentView,
-    sortField, sortDir,
-    type: activeType,
-  }));
-}
-
-const CLUSTERS_META = {
-  ebitda: { name: 'EBITDA Reports', color: '#e74c3c' },
-  trazabilidad: { name: 'Trazabilidad', color: '#9b59b6' },
-  turnos: { name: 'Planificacion Turnos', color: '#3498db' },
-  pedidos: { name: 'Pedidos / Albaranes', color: '#f39c12' },
-  almacen: { name: 'Almacen', color: '#1abc9c' },
-  sentry: { name: 'Sentry', color: '#95a5a6' },
-  integracion: { name: 'Integraciones', color: '#e67e22' },
-  standalone: { name: 'Standalone', color: '#7f8c8d' },
-};
-
+let _fetchingTasks = false;
 async function fetchTasks(force = false) {
+  if (_fetchingTasks) return;
+  _fetchingTasks = true;
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
   setStatus('loading', force ? 'Refreshing from Asana...' : 'Loading...');
-  document.getElementById('refreshBtn').disabled = true;
   try {
     const url = force ? '/api/tasks/refresh' : '/api/tasks';
     const opts = force ? { method: 'POST' } : {};
@@ -47,26 +16,18 @@ async function fetchTasks(force = false) {
     const data = await resp.json();
     allTasks = data.tasks;
     allSections = data.sections || [];
-    // activeSection stays null (All Sections) unless user explicitly picks one
     render();
     const ago = data.last_refresh ? timeAgo(data.last_refresh) : '';
     setStatus('ok', `${data.count} tasks${ago ? ' · updated ' + ago : ''}`);
   } catch (e) {
     setStatus('error', e.message);
     showToast('Error: ' + e.message, 'error');
+  } finally {
+    _fetchingTasks = false;
+    btn.disabled = false;
+    btn.style.opacity = '';
   }
-  document.getElementById('refreshBtn').disabled = false;
 }
-
-function timeAgo(iso) {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-  return Math.floor(diff / 86400) + 'd ago';
-}
-
-let aiAvailable = false;
 
 async function checkAiStatus() {
   try {
@@ -77,11 +38,51 @@ async function checkAiStatus() {
   } catch (e) { aiAvailable = false; }
 }
 
+async function fetchRepoList() {
+  try {
+    const resp = await fetch('/api/repos/list');
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    repoList = data.repos || [];
+  } catch (e) {
+    console.error('Failed to fetch repo list:', e);
+    repoList = [];
+  }
+}
+
+async function fetchAreaRepoMap() {
+  try {
+    const resp = await fetch('/api/repos/mapping/areas');
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    areaRepoMap = data.area_repo_map || {};
+  } catch (e) {
+    console.error('Failed to fetch area repo mapping:', e);
+    areaRepoMap = {};
+  }
+}
+
+async function fetchTaskRepoOverrides() {
+  try {
+    const resp = await fetch('/api/agent/task-repo-overrides');
+    if (!resp.ok) throw new Error(await resp.text());
+    taskRepoOverrides = await resp.json();
+  } catch (e) {
+    console.error('Failed to fetch task repo overrides:', e);
+    taskRepoOverrides = {};
+  }
+}
+
+let _classifying = false;
 async function aiClassifyAll() {
+  if (_classifying) return;
   if (!confirm('Classify all tasks using Claude AI? This will call the Anthropic API.')) return;
+  _classifying = true;
+  const btn = document.getElementById('aiBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  btn.textContent = 'Classifying...';
   setStatus('loading', 'AI classifying...');
-  document.getElementById('aiBtn').disabled = true;
-  document.getElementById('aiBtn').textContent = 'Classifying...';
   try {
     const resp = await fetch('/api/ai/classify-all?force=true', { method: 'POST' });
     if (!resp.ok) throw new Error(await resp.text());
@@ -91,9 +92,12 @@ async function aiClassifyAll() {
   } catch (e) {
     setStatus('error', e.message);
     showToast('AI error: ' + e.message, 'error');
+  } finally {
+    _classifying = false;
+    btn.disabled = false;
+    btn.style.opacity = '';
+    btn.textContent = 'AI Classify All';
   }
-  document.getElementById('aiBtn').disabled = false;
-  document.getElementById('aiBtn').textContent = 'AI Classify All';
 }
 
 async function aiClassifySingle(gid) {
@@ -109,10 +113,15 @@ async function aiClassifySingle(gid) {
   }
 }
 
+let _syncing = false;
 async function syncToAsana() {
+  if (_syncing) return;
   if (!confirm('Push scope scores to Asana Story Point field?')) return;
+  _syncing = true;
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
   setStatus('loading', 'Syncing...');
-  document.getElementById('syncBtn').disabled = true;
   try {
     const resp = await fetch('/api/sync', { method: 'POST' });
     if (!resp.ok) throw new Error(await resp.text());
@@ -122,8 +131,11 @@ async function syncToAsana() {
   } catch (e) {
     setStatus('error', e.message);
     showToast('Sync failed: ' + e.message, 'error');
+  } finally {
+    _syncing = false;
+    btn.disabled = false;
+    btn.style.opacity = '';
   }
-  document.getElementById('syncBtn').disabled = false;
 }
 
 async function updateTask(gid, field, value) {
@@ -141,7 +153,7 @@ async function updateTask(gid, field, value) {
   }
 }
 
-// activeType initialized from localStorage above
+// ════════ SORTING & FILTERING ════════
 
 function getSortValue(task, field) {
   if (field === 'cluster') return task.cluster?.name || '';
@@ -156,9 +168,21 @@ function getSortValue(task, field) {
 
 function getFilteredTasks() {
   let tasks = [...allTasks];
-  if (activeSection) tasks = tasks.filter(t => t.section_name === activeSection);
+
+  // Agent filter: show tasks with agent runs, regardless of section
+  if (activeAgentFilter) {
+    tasks = tasks.filter(t => {
+      const agent = agentStatuses[t.task_gid];
+      if (!agent) return false;
+      if (activeAgentFilter === 'all') return true;
+      return agent.phase === activeAgentFilter;
+    });
+  } else {
+    if (activeSection) tasks = tasks.filter(t => t.section_name === activeSection);
+  }
+
   if (activeCluster) tasks = tasks.filter(t => t.cluster.id === activeCluster);
-  if (activeType === '_quickwin') tasks = tasks.filter(t => t.scope_score <= 2 && t.priority >= 7);
+  if (activeType === '_quickwin') tasks = tasks.filter(t => t.scope_score <= 2 && t.priority >= 4);
   else if (activeType) tasks = tasks.filter(t => t.tipo === activeType);
   if (activeProject) tasks = tasks.filter(t => (t.projects || []).includes(activeProject));
   tasks.sort((a, b) => {
@@ -169,6 +193,13 @@ function getFilteredTasks() {
   });
   return tasks;
 }
+
+function getClientTag(t) {
+  const ct = t.tags.find(tag => tag.startsWith('Cliente:') || tag.startsWith('cliente:'));
+  return ct ? ct.replace(/^[Cc]liente:\s*/, '') : '';
+}
+
+// ════════ RENDERING ════════
 
 function render() {
   if (currentView === 'history') {
@@ -182,20 +213,26 @@ function render() {
 }
 
 function renderSidebar() {
-  // ── Section filter (top of sidebar) ──
   let html = '<h3>Sections</h3>';
   const totalTasks = allTasks.length;
-  html += `<div class="cluster-card ${!activeSection ? 'active' : ''}" onclick="filterSection(null)">
+  html += `<div class="cluster-card ${!activeSection && !activeAgentFilter ? 'active' : ''}" onclick="filterSection(null)">
     <div class="name"><span class="dot" style="background:var(--green)"></span>All Sections<span class="count">${totalTasks}</span></div>
   </div>`;
+  // Agent tasks filter (cross-section)
+  const agentCount = allTasks.filter(t => agentStatuses[t.task_gid]).length;
+  if (agentCount > 0) {
+    html += `<div class="cluster-card ${activeAgentFilter === 'all' ? 'active' : ''}" onclick="filterAgent('all')">
+      <div class="name"><span class="dot" style="background:var(--accent2)"></span>Agent Tasks<span class="count">${agentCount}</span></div>
+    </div>`;
+  }
+
   allSections.filter(s => s.count > 0).forEach(s => {
     const safeName = esc(s.name).replace(/'/g, "\\'");
-    html += `<div class="cluster-card ${activeSection === s.name ? 'active' : ''}" onclick="filterSection('${safeName}')">
+    html += `<div class="cluster-card ${activeSection === s.name && !activeAgentFilter ? 'active' : ''}" onclick="filterSection('${safeName}')">
       <div class="name"><span class="dot" style="background:var(--accent)"></span>${esc(s.name)}<span class="count">${s.count}</span></div>
     </div>`;
   });
 
-  // ── Cluster filter ──
   html += '<h3 style="margin-top:16px">Clusters</h3>';
   const groups = {};
   const filtered = activeSection ? allTasks.filter(t => t.section_name === activeSection) : allTasks;
@@ -218,7 +255,6 @@ function renderSidebar() {
     </div>`;
   });
 
-  // ── Project filter ──
   const projectCounts = {};
   filtered.forEach(t => (t.projects || []).forEach(p => { projectCounts[p] = (projectCounts[p] || 0) + 1; }));
   if (Object.keys(projectCounts).length >= 1) {
@@ -242,9 +278,9 @@ function renderSummary() {
   const mejoras = tasks.filter(t => t.tipo === 'Mejora').length;
   const avgScope = tasks.length ? (tasks.reduce((s,t) => s + t.scope_score, 0) / tasks.length).toFixed(1) : 0;
   const avgPriority = tasks.length ? (tasks.reduce((s,t) => s + t.priority, 0) / tasks.length).toFixed(1) : 0;
-  const quickWins = tasks.filter(t => t.scope_score <= 2 && t.priority >= 7).length;
+  const quickWins = tasks.filter(t => t.scope_score <= 2 && t.priority >= 4).length;
 
-  document.getElementById('summaryBar').innerHTML = `
+  let html = `
     <div class="summary-item clickable ${!activeType ? 'active-filter' : ''}" onclick="filterType(null)"><div class="label">Tasks</div><div class="value">${tasks.length}</div></div>
     <div class="summary-item clickable ${activeType === 'Error' ? 'active-filter' : ''}" onclick="filterType('Error')"><div class="label">Errors</div><div class="value" style="color:var(--red)">${errors}</div></div>
     <div class="summary-item clickable ${activeType === 'Mejora' ? 'active-filter' : ''}" onclick="filterType('Mejora')"><div class="label">Mejoras</div><div class="value" style="color:var(--blue)">${mejoras}</div></div>
@@ -252,13 +288,29 @@ function renderSummary() {
     <div class="summary-item"><div class="label">Avg Priority</div><div class="value">${avgPriority}</div></div>
     <div class="summary-item clickable ${activeType === '_quickwin' ? 'active-filter' : ''}" onclick="filterType('_quickwin')"><div class="label">Quick Wins</div><div class="value" style="color:var(--green)">${quickWins}</div></div>
   `;
+
+  // Agent filter — count tasks that have any agent run
+  const agentTaskCount = allTasks.filter(t => agentStatuses[t.task_gid]).length;
+  const runningAgents = Object.values(agentStatuses).filter(a => a.is_active).length;
+  const queuedAgents = Object.values(agentStatuses).filter(a => a.phase === 'queued').length;
+  if (agentTaskCount > 0) {
+    html += `<div class="summary-item clickable ${activeAgentFilter === 'all' ? 'active-filter' : ''}" onclick="filterAgent('all')"><div class="label">Agent Tasks</div><div class="value" style="color:var(--accent2)">${agentTaskCount}</div></div>`;
+  }
+  if (runningAgents > 0) {
+    html += `<div class="summary-item clickable ${activeAgentFilter === 'coding' ? 'active-filter' : ''}" onclick="filterAgent('coding')"><div class="label">Running</div><div class="value" style="color:var(--blue)">${runningAgents}</div></div>`;
+  }
+  if (queuedAgents > 0) {
+    html += `<div class="summary-item"><div class="label">Queued</div><div class="value" style="color:var(--orange)">${queuedAgents}</div></div>`;
+  }
+
+  document.getElementById('summaryBar').innerHTML = html;
 }
 
 function renderTasks() {
-  const tasks = getFilteredTasks();
   const container = document.getElementById('taskContainer');
+  if (currentView === 'agents') { renderAgentHistory(container); return; }
+  const tasks = getFilteredTasks();
   if (!tasks.length) { container.innerHTML = '<div class="empty-state">No tasks found</div>'; return; }
-
   if (currentView === 'table') { renderTable(tasks, container); return; }
   if (currentView === 'cluster') { renderByCluster(tasks, container); return; }
   renderCards(tasks, container);
@@ -266,11 +318,6 @@ function renderTasks() {
 
 function renderCards(tasks, container) {
   container.innerHTML = '<div class="task-grid">' + tasks.map(t => taskCard(t)).join('') + '</div>';
-}
-
-function getClientTag(t) {
-  const ct = t.tags.find(tag => tag.startsWith('Cliente:') || tag.startsWith('cliente:'));
-  return ct ? ct.replace(/^[Cc]liente:\s*/, '') : '';
 }
 
 function renderTable(tasks, container) {
@@ -304,10 +351,10 @@ function renderTable(tasks, container) {
       <td class="summary-cell">${summary ? `<span class="summary-text">${esc(summary)}</span><button class="btn-copy" onclick="copySummary(this)" title="Copy">&#128203;</button>` : '<span style="color:var(--text2);font-size:11px">Run AI Classify</span>'}</td>
       <td>
         <select class="inline-select" onchange="updateTask('${t.task_gid}','scope_score',this.value)">
-          ${[1,2,3,4,5].map(s => `<option value="${s}" ${s===t.scope_score?'selected':''}>S${s}</option>`).join('')}
+          ${[{v:1,l:'Tiny'},{v:2,l:'Small'},{v:3,l:'Medium'},{v:4,l:'Large'},{v:5,l:'XLarge'}].map(s => `<option value="${s.v}" ${s.v===t.scope_score?'selected':''}>${s.v} \u2014 ${s.l}</option>`).join('')}
         </select>
         <select class="inline-select" onchange="updateTask('${t.task_gid}','priority',this.value)">
-          ${Array.from({length:10},(_,i)=>i+1).map(p => `<option value="${p}" ${p===t.priority?'selected':''}>P${p}</option>`).join('')}
+          ${[{v:1,l:'Lowest'},{v:2,l:'Low'},{v:3,l:'Normal'},{v:4,l:'High'},{v:5,l:'Critical'}].map(p => `<option value="${p.v}" ${p.v===t.priority?'selected':''}>${p.v} \u2014 ${p.l}</option>`).join('')}
         </select>
         ${aiAvailable ? `<button class="btn-icon" onclick="aiClassifySingle('${t.task_gid}')" title="AI Classify">&#x2728;</button>` : ''}
         ${t.notes ? `<button class="btn-icon" onclick="copyNotes('${t.task_gid}')" title="Copy description">&#128203;</button>` : ''}
@@ -369,12 +416,7 @@ async function renderHistory(container) {
       html += '<p style="color:var(--text2);font-size:13px">No resolved tasks yet. Tasks will appear here after they disappear from your active list between syncs (reassigned, moved to QA, etc.).</p>';
     } else {
       html += '<table class="task-table"><thead><tr>';
-      html += '<th>Resolved</th>';
-      html += '<th>Task</th>';
-      html += '<th>Client</th>';
-      html += '<th>Cluster</th>';
-      html += '<th>Scope</th>';
-      html += '<th>Type</th>';
+      html += '<th>Resolved</th><th>Task</th><th>Client</th><th>Cluster</th><th>Scope</th><th>Type</th>';
       html += '</tr></thead><tbody>';
 
       resolvedTasks.forEach(t => {
@@ -394,7 +436,6 @@ async function renderHistory(container) {
     html += '</div>';
     container.innerHTML = html;
 
-    // Render velocity chart
     setTimeout(() => renderVelocityChart(snapshots), 100);
     setStatus('ok', `${resolvedTasks.length} resolved tasks`);
   } catch (e) {
@@ -403,13 +444,89 @@ async function renderHistory(container) {
   }
 }
 
+async function renderAgentHistory(container) {
+  container.innerHTML = '<div class="spinner"></div>';
+  try {
+    const res = await fetch('/api/agent/history');
+    if (!res.ok) throw new Error('Failed to load agent history');
+    const data = await res.json();
+    const { runs, stats } = data;
+
+    let html = '<div class="history-section">';
+    html += `<div class="summary-bar" style="margin-bottom:16px">
+      <div class="summary-item"><div class="label">Total Runs</div><div class="value">${stats.total_runs}</div></div>
+      <div class="summary-item"><div class="label">Completed</div><div class="value" style="color:var(--green)">${stats.completed}</div></div>
+      <div class="summary-item"><div class="label">Failed</div><div class="value" style="color:var(--red)">${stats.failed}</div></div>
+      <div class="summary-item"><div class="label">Success Rate</div><div class="value">${stats.success_rate}%</div></div>
+      <div class="summary-item"><div class="label">Total Cost</div><div class="value">$${stats.total_cost_usd.toFixed(2)}</div></div>
+      <div class="summary-item"><div class="label">Avg Duration</div><div class="value">${Math.round(stats.avg_duration_seconds / 60)}m</div></div>
+    </div>`;
+
+    if (runs.length === 0) {
+      html += '<p style="color:var(--text2)">No agent runs yet.</p>';
+    } else {
+      html += `<table class="task-table"><thead><tr>
+        <th>Task</th><th>Status</th><th>Repos</th><th>Commits</th>
+        <th>Tokens</th><th>Cost</th><th>Duration</th><th>Retries</th><th>Date</th>
+      </tr></thead><tbody>`;
+
+      runs.forEach(r => {
+        const phaseColor = PHASE_COLORS[r.phase] || '#6b7280';
+        const duration = r.duration_seconds ? `${Math.round(r.duration_seconds / 60)}m` : '-';
+        const tokens = (r.tokens?.input || 0) + (r.tokens?.output || 0);
+        const tokensStr = tokens > 0 ? `${(tokens / 1000).toFixed(1)}k` : '-';
+        const costStr = r.cost_usd > 0 ? `$${r.cost_usd.toFixed(3)}` : '-';
+        const date = r.created_at ? new Date(r.created_at).toLocaleDateString() : '-';
+        const commits = r.repos.reduce((s, repo) => s + (repo.commits || 0), 0);
+        const repoNames = r.repos.map(repo => repo.id).join(', ');
+
+        html += `<tr>
+          <td style="max-width:300px"><span style="font-size:13px">${esc(r.task_name || r.task_gid)}</span></td>
+          <td><span class="badge agent-phase-badge" style="background:${phaseColor}">${r.phase}</span></td>
+          <td style="font-size:11px;color:var(--text2)">${esc(repoNames)}</td>
+          <td>${commits}</td>
+          <td style="font-size:11px">${tokensStr}</td>
+          <td style="font-size:11px">${costStr}</td>
+          <td style="font-size:11px">${duration}</td>
+          <td>${r.retries || 0}</td>
+          <td style="font-size:11px;color:var(--text2)">${date}</td>
+        </tr>`;
+
+        if (r.error) {
+          html += `<tr><td colspan="9" style="padding:4px 10px"><span style="font-size:11px;color:var(--red)">${esc(r.error)}</span></td></tr>`;
+        }
+
+        if (r.quality_checks && r.quality_checks.length > 0) {
+          html += `<tr><td colspan="9" style="padding:8px 10px;background:var(--surface2)">`;
+          html += `<div style="font-size:11px"><strong>Quality Checks:</strong> `;
+          r.quality_checks.forEach(c => {
+            const icon = c.passed ? '✓' : '✗';
+            const color = c.passed ? 'var(--green)' : 'var(--orange)';
+            html += `<span style="margin-right:12px;color:${color}">${icon} ${esc(c.check)}</span>`;
+          });
+          html += `</div></td></tr>`;
+        }
+      });
+
+      html += '</tbody></table>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+    setStatus('ok', `${stats.total_runs} agent runs`);
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state">Error: ${esc(e.message)}</div>`;
+    setStatus('error', e.message);
+  }
+}
+
+// ════════ CHARTS ════════
+
 function renderVelocityChart(snapshots) {
   const canvas = document.getElementById('velocityChartCanvas');
   if (!canvas) return;
 
-  // Sort snapshots by date
   const sorted = snapshots.sort((a, b) => new Date(a.date) - new Date(b.date));
-
   const labels = sorted.map(s => new Date(s.date).toLocaleDateString());
   const data = sorted.map(s => s.open_count);
 
@@ -443,42 +560,7 @@ function renderVelocityChart(snapshots) {
   });
 }
 
-function taskCard(t) {
-  const aiSource = t.classification_source === 'ai';
-  const client = getClientTag(t);
-  const summary = t.ai_summary || t.ai_reasoning || '';
-  return `<div class="task-card">
-    <div class="task-header">
-      <span class="badge badge-rank" title="Execution order">#${t.rank}</span>
-      <a class="task-name" href="${t.permalink_url}" target="_blank">${esc(t.name)}</a>
-      <div class="task-badges">
-        ${aiSource ? '<span class="badge badge-ai" title="Classified by AI">AI</span>' : ''}
-        ${client ? `<span class="badge badge-client">${esc(client)}</span>` : ''}
-        <span class="badge badge-cluster" style="background:${t.cluster.color}">${esc(t.cluster.name)}</span>
-        <span class="badge badge-tipo">${esc(t.tipo)}</span>
-        <select class="inline-select" onchange="updateTask('${t.task_gid}','scope_score',this.value)" title="Scope Score">
-          ${[1,2,3,4,5].map(s => `<option value="${s}" ${s===t.scope_score?'selected':''}>S${s}</option>`).join('')}
-        </select>
-        <select class="inline-select" onchange="updateTask('${t.task_gid}','priority',this.value)" title="Priority">
-          ${Array.from({length:10},(_,i)=>i+1).map(p => `<option value="${p}" ${p===t.priority?'selected':''}>P${p}</option>`).join('')}
-        </select>
-        ${aiAvailable ? `<button class="btn-icon" onclick="aiClassifySingle('${t.task_gid}')" title="Re-classify with AI">&#x2728;</button>` : ''}
-        <button class="btn-icon" onclick="copyBranch('${t.task_gid}')" title="Copy branch name">&#x1F33F;</button>
-      </div>
-    </div>
-    ${summary ? `<div class="ai-summary"><span class="summary-text">${esc(summary)}</span><button class="btn-copy" onclick="copySummary(this)" title="Copy">&#128203;</button></div>` : ''}
-    ${t.notes_preview ? `<div class="task-notes">${esc(t.notes_preview)}${t.notes ? `<button class="btn-copy" onclick="copyNotes('${t.task_gid}')" title="Copy full description">&#128203;</button>` : ''}</div>` : ''}
-    <div class="task-tags">
-      ${!activeSection && t.section_name ? `<span class="badge" style="background:#1e3a5f;color:#93c5fd;font-size:10px;padding:2px 6px;border-radius:3px">${esc(t.section_name)}</span>` : ''}
-      ${(t.projects||[]).map(p => `<span class="badge badge-project">${esc(p)}</span>`).join('')}
-      ${t.tags.filter(tag => !tag.startsWith('Cliente:') && !tag.startsWith('cliente:')).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}
-      ${t.desarrollador && t.desarrollador !== 'N/A' ? `<span class="tag" style="border:1px solid var(--accent);color:var(--accent)">${esc(t.desarrollador)}</span>` : ''}
-    </div>
-  </div>`;
-}
-
 function renderCharts() {
-  // Scope distribution
   const scopeCounts = [0,0,0,0,0];
   allTasks.forEach(t => scopeCounts[t.scope_score - 1]++);
 
@@ -495,7 +577,6 @@ function renderCharts() {
     }
   });
 
-  // Cluster pie
   const clusterData = {};
   allTasks.forEach(t => {
     const cid = t.cluster.id;
@@ -520,10 +601,13 @@ function renderCharts() {
   });
 }
 
+// ════════ UI CONTROLS ════════
+
 function filterSection(name) {
   activeSection = name;
   activeCluster = null;
   activeProject = null;
+  activeAgentFilter = null;
   _saveFilters();
   render();
 }
@@ -550,10 +634,10 @@ function setView(view, el) {
   const sidebar = document.getElementById('sidebar');
   const summaryBar = document.getElementById('summaryBar');
 
-  if (view === 'history') {
+  if (view === 'history' || view === 'agents') {
     sidebar.style.display = 'none';
     summaryBar.style.display = 'none';
-    renderHistory(container);
+    renderTasks();
   } else {
     sidebar.style.display = 'block';
     summaryBar.style.display = 'flex';
@@ -569,77 +653,8 @@ function sortBy(field) {
   renderTasks();
 }
 
-function setStatus(state, text) {
-  const dot = document.getElementById('statusDot');
-  dot.className = 'status-dot ' + state;
-  document.getElementById('statusText').textContent = text;
-}
-
-function showToast(msg, type) {
-  const t = document.createElement('div');
-  t.className = 'toast ' + type;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
-}
-
-function copySummary(btn) {
-  const text = btn.parentElement.querySelector('.summary-text')?.textContent || btn.previousElementSibling?.textContent || '';
-  copyToClipboard(text.trim()).then(() => {
-    const orig = btn.innerHTML;
-    btn.innerHTML = '&#10003;';
-    btn.style.opacity = '1';
-    setTimeout(() => { btn.innerHTML = orig; btn.style.opacity = ''; }, 1500);
-  });
-}
-
-function copyNotes(gid) {
-  const task = allTasks.find(t => t.task_gid === gid);
-  if (!task || !task.notes) return;
-  copyToClipboard(task.notes).then(() => {
-    showToast('Description copied', 'success');
-  });
-}
-
-async function copyBranch(gid) {
-  showToast('Generating branch name...', 'success');
-  try {
-    const resp = await fetch(`/api/ai/branch-name/${gid}`, { method: 'POST' });
-    if (!resp.ok) throw new Error(await resp.text());
-    const data = await resp.json();
-    await copyToClipboard(data.branch);
-    showToast(`Copied: ${data.branch}`, 'success');
-  } catch (e) {
-    showToast('Branch name error: ' + e.message, 'error');
-  }
-}
-
-function copyToClipboard(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-  // Fallback for HTTP contexts
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  document.body.removeChild(ta);
-  return Promise.resolve();
-}
-
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s || '';
-  return d.innerHTML;
-}
-
 function filterType(type, el) {
-  // Toggle off if clicking the same filter
   activeType = (activeType === type) ? null : type;
-  // Sync type pills
   document.querySelectorAll('.type-pill').forEach(p => p.classList.remove('active'));
   if (!activeType) document.querySelector('.type-pill')?.classList.add('active');
   else if (el) el.classList.add('active');
@@ -647,30 +662,11 @@ function filterType(type, el) {
   render();
 }
 
-// Sidebar resize
-(function() {
-  const handle = document.getElementById('resizeHandle');
-  const sidebar = document.getElementById('sidebar');
-  let startX, startW;
-  handle.addEventListener('mousedown', e => {
-    startX = e.clientX; startW = sidebar.offsetWidth;
-    handle.classList.add('active');
-    const onMove = e2 => { sidebar.style.width = Math.max(180, Math.min(500, startW + e2.clientX - startX)) + 'px'; sidebar.style.minWidth = 'unset'; };
-    const onUp = () => { handle.classList.remove('active'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-})();
-
-// Init — restore saved view tab
-checkAiStatus();
-fetchTasks().then(() => {
-  if (currentView !== 'cards') {
-    const tabs = document.querySelectorAll('.view-tab');
-    tabs.forEach(t => {
-      t.classList.remove('active');
-      if (t.textContent.toLowerCase().replace(/\s/g,'') === currentView) t.classList.add('active');
-    });
-    setView(currentView, document.querySelector('.view-tab.active'));
-  }
-});
+function filterAgent(phase) {
+  // Toggle: click same filter again to clear
+  activeAgentFilter = (activeAgentFilter === phase) ? null : phase;
+  // Clear section filter when agent filter is active (cross-section view)
+  if (activeAgentFilter) activeSection = null;
+  _saveFilters();
+  render();
+}

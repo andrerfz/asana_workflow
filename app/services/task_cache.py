@@ -1,13 +1,37 @@
 """In-memory cache for Asana tasks. Refreshed by background poller."""
+import math
 import logging
 from datetime import datetime, timezone
 
-from asana_client import fetch_tasks, fetch_sections
-from classifier import classify_task
-from config import DEFAULT_SECTION
-from storage import load_overrides
+from .asana_client import fetch_tasks, fetch_sections
+from .classifier import classify_task
+from ..config import DEFAULT_SECTION
+from .storage import load_overrides, save_overrides, clear_ai_cache
 
 log = logging.getLogger(__name__)
+
+_priority_migrated = False
+
+
+def _migrate_priority_scale():
+    """One-time migration: convert priority from 1-10 scale to 1-5 scale."""
+    global _priority_migrated
+    if _priority_migrated:
+        return
+    _priority_migrated = True
+
+    local_data = load_overrides()
+    overrides = local_data.get("overrides", {})
+    migrated = 0
+    for gid, ov in overrides.items():
+        old_pri = ov.get("priority")
+        if old_pri is not None and old_pri > 5:
+            ov["priority"] = min(5, math.ceil(old_pri / 2))
+            migrated += 1
+    if migrated:
+        save_overrides(local_data)
+        clear_ai_cache()
+        log.info("Migrated %d task priorities from 1-10 to 1-5 scale (AI cache cleared)", migrated)
 
 _cached_tasks: list[dict] = []
 _cached_sections: list[dict] = []
@@ -17,6 +41,8 @@ _last_refresh: str | None = None
 async def refresh_cache():
     """Fetch from Asana, classify, apply overrides, store in memory."""
     global _cached_tasks, _cached_sections, _last_refresh
+
+    _migrate_priority_scale()
 
     # Fetch all project tasks (all sections) + section list
     raw_tasks = await fetch_tasks()  # no section_gid → all project tasks
@@ -75,7 +101,7 @@ def get_cached_sections() -> list[dict]:
 
 def _apply_overrides(result: dict, overrides: dict, gid: str) -> dict:
     """Apply local overrides to a classified task (same logic as routes/tasks.py)."""
-    from config import CLUSTER_COLORS
+    from ..config import CLUSTER_COLORS
     if gid in overrides:
         ov = overrides[gid]
         if "scope_score" in ov:
@@ -87,6 +113,8 @@ def _apply_overrides(result: dict, overrides: dict, gid: str) -> dict:
                 result["cluster"]["color"] = CLUSTER_COLORS[ov["cluster_id"]]
         if "priority" in ov:
             result["priority"] = ov["priority"]
+        if "area" in ov:
+            result["area"] = ov["area"]
         if "ai_reasoning" in ov:
             result["ai_reasoning"] = ov["ai_reasoning"]
         if "ai_summary" in ov:

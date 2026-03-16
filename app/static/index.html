@@ -17,6 +17,25 @@
     <button class="btn" onclick="fetchTasks(true)" id="refreshBtn">Refresh</button>
     <button class="btn btn-ai" onclick="aiClassifyAll()" id="aiBtn">AI Classify All</button>
     <button class="btn btn-sync" onclick="syncToAsana()" id="syncBtn">Sync to Asana</button>
+    <button class="btn" onclick="openSettings()" title="Settings">&#9881;</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal" style="display:none" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Settings</h2>
+      <button class="btn-icon" onclick="closeSettings()" style="font-size:18px;color:var(--text);background:var(--surface2)">&times;</button>
+    </div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" onclick="switchSettingsTab('repos',this)">Repositories</button>
+      <button class="modal-tab" onclick="switchSettingsTab('ide',this)">IDE</button>
+      <button class="modal-tab" onclick="switchSettingsTab('mapping',this)">Area Mapping</button>
+      <button class="modal-tab" onclick="switchSettingsTab('agent',this)">Agent</button>
+      <button class="modal-tab" onclick="switchSettingsTab('workflow',this)">Workflow</button>
+    </div>
+    <div class="modal-body" id="settingsBody"></div>
   </div>
 </div>
 
@@ -40,6 +59,7 @@
       <button class="view-tab" onclick="setView('table', this)">Table</button>
       <button class="view-tab" onclick="setView('cluster', this)">By Cluster</button>
       <button class="view-tab" onclick="setView('history', this)">History</button>
+      <button class="view-tab" onclick="setView('agents', this)">Agents</button>
       <div class="type-filters">
         <button class="type-pill" onclick="filterType(null, this)">All</button>
         <button class="type-pill" onclick="filterType('Error', this)">Error</button>
@@ -51,6 +71,12 @@
   </div>
 </div>
 
+<script src="/static/state.js"></script>
+<script src="/static/utils.js"></script>
+<script src="/static/taskCard.js"></script>
+<script src="/static/agent.js"></script>
+<script src="/static/views.js"></script>
+<script src="/static/settings.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

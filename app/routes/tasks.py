@@ -3,11 +3,11 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from asana_client import fetch_tasks, update_task
-from classifier import classify_task
-from config import CLUSTER_COLORS, STORY_POINT_FIELD_GID
-from storage import load_overrides, save_overrides
-from task_cache import get_cached_tasks, get_cached_sections, refresh_cache
+from ..services.asana_client import fetch_tasks, update_task
+from ..services.classifier import classify_task
+from ..config import CLUSTER_COLORS, STORY_POINT_FIELD_GID
+from ..services.storage import load_overrides, save_overrides
+from ..services.task_cache import get_cached_tasks, get_cached_sections, refresh_cache
 
 router = APIRouter(prefix="/api", tags=["tasks"])
 

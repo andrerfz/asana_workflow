@@ -1,7 +1,7 @@
 """Local JSON persistence for overrides, history, and AI cache."""
 import json
 
-from config import CLASSIFICATIONS_FILE, HISTORY_FILE, RESOLVED_FILE, AI_CACHE_FILE
+from ..config import CLASSIFICATIONS_FILE, HISTORY_FILE, RESOLVED_FILE, AI_CACHE_FILE
 
 
 # --- Overrides / Classifications ---
