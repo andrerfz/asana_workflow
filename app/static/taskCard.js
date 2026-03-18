@@ -13,39 +13,43 @@ function taskCard(t) {
   const repoIdsArray = Array.isArray(taskRepos) ? taskRepos : [];
 
   // ── Row 1: Header ──
+  // Button visibility rules per agent phase.
+  // true = always show, 'wt' = only if agent has a worktree
+  const PHASE_BUTTONS = {
+    queued:            { stop: true },
+    init:              { stop: true },
+    planning:          { stop: true },
+    awaiting_approval: { stop: true },
+    coding:            { stop: true },
+    testing:           { stop: true },
+    qa_review:         { stop: true },
+    paused:            { stop: true },
+    done:              { dismiss: true, test: 'wt', qa: true, classify: true },
+    error:             { dismiss: true, retry: true, test: 'wt', qa: true, classify: true },
+    cancelled:         { dismiss: true, retry: true, test: 'wt', qa: 'wt', classify: true },
+  };
+
   let agentControls = '';
   const phase = hasAgent ? agent.phase : null;
-  const isActive = hasAgent && agent.is_active;
   const busy = _isBusy(t.task_gid);
-  const dis = busy ? 'disabled style="opacity:0.5;pointer-events:none"' : '';
+  const dis = busy ? 'disabled' : '';
+  const gid = t.task_gid;
 
   if (!hasAgent) {
-    // No agent — show start button
     const startDis = busy || !hasRepos;
-    agentControls = `<button class="btn-icon btn-agent-start" onclick="startAgent('${t.task_gid}',this)" ${startDis?'disabled':''} title="${!hasRepos?'Assign a repo first':'Start AI Agent'}" style="${startDis?'opacity:0.4;pointer-events:none':''}">&#x1F916;</button>`;
-  } else if (isActive) {
-    // Agent running — show stop button
-    agentControls = `<button class="btn-icon" onclick="stopAgent('${t.task_gid}',this)" ${dis} title="Stop Agent" style="color:var(--red)${busy?';opacity:0.5;pointer-events:none':''}">&#x23F9;</button>`;
-  } else if (phase === 'done') {
-    // Done — show clear + test + QA
-    agentControls = `<button class="btn-icon" onclick="clearAgent('${t.task_gid}')" ${dis} title="Dismiss" style="color:var(--text2)">&#x2715;</button>`;
-    if (agentHasWorktree) agentControls += `<button class="btn" onclick="runManualTest('${t.task_gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#3b82f6;color:#fff;border:none;border-radius:4px;margin-left:4px" title="Run tests on worktree">Test</button>`;
-    agentControls += `<button class="btn" onclick="runManualQA('${t.task_gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#a855f7;color:#fff;border:none;border-radius:4px;margin-left:4px">QA</button>`;
-  } else if (phase === 'error') {
-    // Error — show clear + restart + test + QA
-    agentControls = `<button class="btn-icon" onclick="clearAgent('${t.task_gid}')" ${dis} title="Dismiss" style="color:var(--text2)">&#x2715;</button>`;
-    agentControls += `<button class="btn-icon btn-agent-start" onclick="startAgent('${t.task_gid}',this)" ${dis} title="Retry Agent">&#x1F504;</button>`;
-    if (agentHasWorktree) agentControls += `<button class="btn" onclick="runManualTest('${t.task_gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#3b82f6;color:#fff;border:none;border-radius:4px;margin-left:4px" title="Run tests on worktree">Test</button>`;
-    agentControls += `<button class="btn" onclick="runManualQA('${t.task_gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#a855f7;color:#fff;border:none;border-radius:4px;margin-left:4px">QA</button>`;
+    agentControls = `<button class="btn-icon btn-agent-start${startDis?' ui-disabled':''}" onclick="startAgent('${gid}',this)" ${startDis?'disabled':''} title="${!hasRepos?'Assign a repo first':'Start AI Agent'}">&#x1F916;</button>`;
   } else {
-    // Other inactive phases (cancelled, etc) — show clear + restart + test + QA if worktree exists
-    agentControls = `<button class="btn-icon" onclick="clearAgent('${t.task_gid}')" ${dis} title="Dismiss" style="color:var(--text2)">&#x2715;</button>`;
-    agentControls += `<button class="btn-icon btn-agent-start" onclick="startAgent('${t.task_gid}',this)" ${dis} title="Retry Agent">&#x1F504;</button>`;
-    if (agentHasWorktree) {
-      agentControls += `<button class="btn" onclick="runManualTest('${t.task_gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#3b82f6;color:#fff;border:none;border-radius:4px;margin-left:4px" title="Run tests on worktree">Test</button>`;
-      agentControls += `<button class="btn" onclick="runManualQA('${t.task_gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#a855f7;color:#fff;border:none;border-radius:4px;margin-left:4px">QA</button>`;
-    }
+    const r = PHASE_BUTTONS[phase] || { dismiss: true, retry: true };
+    if (r.stop)    agentControls += `<button class="btn-icon" onclick="stopAgent('${gid}',this)" ${dis} title="Stop Agent" style="color:var(--red)">&#x23F9;</button>`;
+    if (r.dismiss) agentControls += `<button class="btn-icon" onclick="clearAgent('${gid}')" ${dis} title="Dismiss" style="color:var(--text2)">&#x2715;</button>`;
+    if (r.retry)   agentControls += `<button class="btn-icon btn-agent-start" onclick="startAgent('${gid}',this)" ${dis} title="Retry Agent">&#x1F504;</button>`;
+    if (r.test === true || (r.test === 'wt' && agentHasWorktree))
+      agentControls += `<button class="btn" onclick="runManualTest('${gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#3b82f6;color:#fff;border:none;border-radius:4px;margin-left:4px" title="Run tests on worktree">Test</button>`;
+    if (r.qa === true || (r.qa === 'wt' && agentHasWorktree))
+      agentControls += `<button class="btn" onclick="runManualQA('${gid}',this)" ${dis} style="font-size:10px;padding:2px 8px;background:#a855f7;color:#fff;border:none;border-radius:4px;margin-left:4px">QA</button>`;
   }
+
+  const canClassify = aiAvailable && (!hasAgent || (PHASE_BUTTONS[phase] || {}).classify);
 
   const row1 = `<div class="tc-header">
     <span class="badge badge-rank" title="Execution order">#${t.rank}</span>
@@ -53,8 +57,8 @@ function taskCard(t) {
     <div class="tc-actions">
       ${hasAgent ? agentBadgeHTML(agent) : ''}
       ${agentControls}
-      ${aiAvailable && !isActive ? `<button class="btn-icon" onclick="aiClassifySingle('${t.task_gid}')" ${dis} title="Re-classify with AI">&#x2728;</button>` : ''}
-      <button class="btn-icon" onclick="copyBranch('${t.task_gid}')" title="Copy branch name">&#x1F33F;</button>
+      ${canClassify ? `<button class="btn-icon" onclick="aiClassifySingle('${gid}')" ${dis} title="Re-classify with AI">&#x2728;</button>` : ''}
+      <button class="btn-icon" onclick="copyBranch('${gid}')" title="Copy branch name">&#x1F33F;</button>
     </div>
   </div>`;
 
@@ -112,8 +116,9 @@ function taskCard(t) {
     expandable += `<div class="task-notes">${esc(t.notes_preview)}${t.notes ? `<button class="btn-copy" onclick="copyNotes('${t.task_gid}')" title="Copy full description">&#128203;</button>` : ''}</div>`;
   }
 
-  return `<div class="task-card" id="task-card-${t.task_gid}" data-has-repos="${hasRepos}">
-    ${row1}${row2}${row3}${expandable}
+  const busyOverlay = busy ? '<div class="card-overlay"><div class="card-overlay-inner"><span class="spinner"></span></div></div>' : '';
+  return `<div class="task-card${busy ? ' card-busy' : ''}" id="task-card-${t.task_gid}" data-has-repos="${hasRepos}">
+    ${row1}${row2}${row3}${expandable}${busyOverlay}
   </div>`;
 }
 
@@ -177,7 +182,7 @@ function agentBadgeHTML(agent) {
 
 function agentPanelHTML(gid, agent) {
   const busy = _isBusy(gid);
-  const dis = busy ? 'disabled style="opacity:0.5;pointer-events:none"' : '';
+  const dis = busy ? 'disabled' : '';
   let html = `<div class="agent-panel" id="agent-panel-${gid}">`;
 
   // Current activity indicator — always visible for active agents
@@ -192,8 +197,8 @@ function agentPanelHTML(gid, agent) {
     </div>`;
   }
 
-  // Guide input — only when actively coding
-  if (agent.is_active && agent.phase === 'coding') {
+  // Guide input — available during any active phase (except those with dedicated inputs)
+  if (agent.is_active && !['awaiting_approval', 'paused', 'queued'].includes(agent.phase)) {
     html += `<div class="agent-guide" style="margin-bottom:8px;padding:10px 12px;background:rgba(59,130,246,0.07);border-left:3px solid #3b82f6;border-radius:4px">
       <div style="font-size:11px;font-weight:600;color:#3b82f6;margin-bottom:6px">Guide Agent</div>
       <div style="display:flex;gap:6px;align-items:flex-end">

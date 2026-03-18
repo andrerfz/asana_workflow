@@ -242,11 +242,11 @@ async def answer_question(task_gid: str, answer: str) -> bool:
 
 
 async def guide_agent(task_gid: str, feedback: str) -> bool:
-    """Interrupt the running coding Claude process and resume with user feedback."""
+    """Interrupt the running Claude process and resume with user feedback."""
     run = load_agent_run(task_gid)
     if not run:
         return False
-    if run.get("phase") != AgentPhase.CODING.value:
+    if not run.get("is_active"):
         return False
     worker = _active_workers.get(task_gid)
     if not worker or worker.done():
@@ -575,6 +575,12 @@ async def _run_agent(task_gid: str, task: dict):
                 add_log(task_gid, "QA review could not produce a report after retry — stopping", "error")
                 update_phase(task_gid, AgentPhase.ERROR, error="QA review failed to produce a report")
                 return
+
+            # QA auto-approved (PASS) — skip human review
+            run = load_agent_run(task_gid)
+            if not run.get("question"):
+                add_log(task_gid, "QA auto-approved — skipping to done")
+                break
 
             # Wait for QA approval — pause work timer
             add_log(task_gid, "Waiting for QA approval...")
@@ -1400,7 +1406,7 @@ async def _agent_qa_review(task_gid: str, task: dict, run: dict) -> Optional[str
             add_log(task_gid, "QA verdict: PASS — auto-approved")
             await _post_asana_comment(task_gid, f"🔍 QA Review (PASS):\n\n{qa_text[:3000]}", dedup_prefix="🔍 QA Review")
             await _broadcast_state(task_gid)
-            return None
+            return qa_text
         else:
             run["question"] = {
                 "text": qa_text,
@@ -1450,7 +1456,14 @@ async def trigger_manual_qa(task_gid: str, task: dict):
                 await _broadcast_state(task_gid)
                 return
 
+            # QA auto-approved (PASS) — skip human review
             current_run = load_agent_run(task_gid)
+            if not current_run.get("question"):
+                add_log(task_gid, "QA auto-approved")
+                update_phase(task_gid, AgentPhase.DONE)
+                await _broadcast_state(task_gid)
+                return
+
             pre_answer = current_run.get("question", {}).get("answer") if current_run.get("question") else None
             if pre_answer:
                 add_log(task_gid, f"QA answer already received: {pre_answer[:50]}")
@@ -1550,6 +1563,12 @@ async def trigger_manual_qa(task_gid: str, task: dict):
                 if not qa_report:
                     break
 
+                # QA auto-approved (PASS) — done
+                current_run = load_agent_run(task_gid)
+                if not current_run.get("question"):
+                    add_log(task_gid, "QA auto-approved after fixes")
+                    break
+
                 add_log(task_gid, "Waiting for QA approval (fix cycle)...")
                 while True:
                     await asyncio.sleep(2)
@@ -1621,7 +1640,7 @@ async def run_manual_tests(task_gid: str) -> dict:
     if not repos_with_worktrees:
         raise ValueError("No worktrees found for this task")
 
-    prev_phase = run["phase"]
+    prev_phase = AgentPhase(run["phase"])
     update_phase(task_gid, AgentPhase.TESTING)
     await _broadcast_state(task_gid)
 

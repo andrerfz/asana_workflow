@@ -461,3 +461,21 @@ textarea.form-input { font-family: 'SF Mono', 'Fira Code', monospace; font-size:
 .wf-detail-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .wf-detail-body { display: flex; flex-direction: column; gap: 4px; }
 .wf-detail-line { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+/* ── Card Loading Overlay ── */
+.card-busy { position: relative; }
+.card-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(15, 17, 23, 0.72);
+  backdrop-filter: blur(2px);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  animation: cardOverlayIn 0.12s ease-out;
+}
+.card-overlay-inner { display: flex; align-items: center; gap: 10px; }
+.card-overlay-label { font-size: 13px; color: var(--text2); font-weight: 500; letter-spacing: 0.3px; }
+@keyframes cardOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── UI State Classes ── */
+.ui-disabled { opacity: 0.4 !important; pointer-events: none !important; cursor: not-allowed !important; }
+.ui-hidden { display: none !important; }

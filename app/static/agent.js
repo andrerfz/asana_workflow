@@ -1,30 +1,4 @@
-// ════════ BUTTON LOADING STATE ════════
-
-const _busy = new Set();
-
-/** Check if any action is in-flight for this task. */
-function _isBusy(gid) { return _busy.has(gid); }
-
-/** Wrap an async action: disables ALL agent buttons for this task while in-flight.
- *  No need to restore — renderTasks() rebuilds the DOM after fetchAgentStatus. */
-async function _withLoading(btn, gid, fn) {
-  if (_busy.has(gid)) return;
-  _busy.add(gid);
-  // Disable all action buttons in this task card
-  const card = document.getElementById(`task-card-${gid}`);
-  const buttons = card ? card.querySelectorAll('.tc-actions button, .agent-panel button') : [];
-  buttons.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; b.style.pointerEvents = 'none'; });
-  // Show spinner on clicked button (static content, safe)
-  const spinner = document.createElement('span');
-  spinner.className = 'btn-spinner';
-  btn.textContent = '';
-  btn.appendChild(spinner);
-  try {
-    await fn();
-  } finally {
-    _busy.delete(gid);
-  }
-}
+// Loading state (busy, overlay) managed by CardUI — see cardUI.js
 
 // ════════ WEBSOCKET ════════
 
@@ -174,8 +148,7 @@ function updateAgentUI(gid) {
 
 async function startAgent(gid, btn) {
   if (_isBusy(gid)) return;
-  _busy.add(gid);
-  if (btn) btn.disabled = true;
+  CardUI.busy(gid, 'Preparing...');
   try {
     const [branchRes, suggestRes] = await Promise.all([
       fetch(`/api/ai/branch-name/${gid}`, { method: 'POST' }),
@@ -200,7 +173,7 @@ async function startAgent(gid, btn) {
       await _doStartAgent(gid, slug, null);
     }
   } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-  finally { _busy.delete(gid); if (btn) btn.disabled = false; }
+  finally { CardUI.idle(gid); }
 }
 
 function _showBranchModal(gid, slug, suggestions) {
@@ -237,6 +210,7 @@ async function _selectBranch(gid, slug, baseBranch) {
 }
 
 async function _doStartAgent(gid, slug, baseBranch) {
+  if (!_isBusy(gid)) CardUI.busy(gid, 'Starting agent...');
   try {
     const payload = { branch_slug: slug };
     if (baseBranch) payload.base_branch = baseBranch;
@@ -255,6 +229,7 @@ async function _doStartAgent(gid, slug, baseBranch) {
     renderTasks();
     showToast(baseBranch ? `Agent started (continuing from ${baseBranch})` : 'Agent started');
   } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
+  finally { CardUI.idle(gid); }
 }
 
 async function updateTaskRepos(gid, selectedRepoIds) {
@@ -293,63 +268,45 @@ function handleRepoSelection(gid, selectEl) {
 }
 
 async function stopAgent(gid, btn) {
-  if (_isBusy(gid)) return;
-  _busy.add(gid);
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
-  try {
+  return CardUI.wrap(gid, async () => {
     const res = await fetch(`/api/agent/stop/${gid}`, { method: 'POST' });
     if (res.ok) {
       await fetchAgentStatus(gid);
       showToast('Agent stopped');
     }
-  } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-  finally { _busy.delete(gid); }
+  }, 'Stopping...');
 }
 
 async function clearAgent(gid) {
-  if (_isBusy(gid)) return;
-  _busy.add(gid);
-  try {
+  return CardUI.wrap(gid, async () => {
     await fetch(`/api/agent/clear/${gid}`, { method: 'DELETE' });
     delete agentStatuses[gid];
     renderTasks();
-  } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-  finally { _busy.delete(gid); }
+  });
 }
 
 async function approveAgentPlan(gid, btn) {
-  if (btn) return _withLoading(btn, gid, async () => {
+  return CardUI.wrap(gid, async () => {
     await answerAgent(gid, 'Approve');
     await fetchAgentStatus(gid);
-  });
-  await answerAgent(gid, 'Approve');
-  await fetchAgentStatus(gid);
+  }, 'Approving...');
 }
 
 async function rejectAgentPlan(gid, btn) {
-  if (btn) return _withLoading(btn, gid, async () => {
+  return CardUI.wrap(gid, async () => {
     await answerAgent(gid, 'Reject');
     await fetchAgentStatus(gid);
-  });
-  await answerAgent(gid, 'Reject');
-  await fetchAgentStatus(gid);
+  }, 'Rejecting...');
 }
 
 async function reviseAgentPlan(gid, btn) {
-  if (_isBusy(gid)) return;
   const input = document.getElementById(`agent-revise-${gid}`);
   const feedback = input?.value?.trim();
   if (!feedback) { showToast('Type your feedback first', 'error'); return; }
-  const planEl = btn?.closest('.agent-plan');
-  const planBtns = planEl ? planEl.querySelectorAll('button, textarea') : [];
-  planBtns.forEach(el => { el.disabled = true; el.style.opacity = '0.5'; });
-  if (btn) { btn.textContent = 'Revising...'; btn.style.opacity = '1'; }
-  try {
+  return CardUI.wrap(gid, async () => {
     await answerAgent(gid, `revise:${feedback}`);
     await fetchAgentStatus(gid);
-  } finally {
-    planBtns.forEach(el => { el.disabled = false; el.style.opacity = ''; });
-  }
+  }, 'Revising...');
 }
 
 async function answerAgent(gid, answer) {
@@ -360,7 +317,13 @@ async function answerAgent(gid, answer) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      showToast(err.detail || 'Failed to send answer', 'error');
+      const detail = err.detail || 'Failed to send answer';
+      // Agent already moved past this state — stale UI
+      if (res.status === 400) {
+        showToast('Agent already moved on — refreshing', 'error');
+      } else {
+        showToast(detail, 'error');
+      }
       return;
     }
     showToast(`Sent: ${answer.length > 40 ? answer.slice(0, 40) + '...' : answer}`);
@@ -368,96 +331,82 @@ async function answerAgent(gid, answer) {
 }
 
 function answerAgentCustom(gid) {
-  if (_isBusy(gid)) return;
   const input = document.getElementById(`agent-answer-${gid}`);
   const val = input?.value?.trim();
   if (!val) { showToast('Type your answer first', 'error'); return; }
-  _busy.add(gid);
-  answerAgent(gid, val).then(() => fetchAgentStatus(gid)).finally(() => _busy.delete(gid));
+  CardUI.wrap(gid, async () => {
+    await answerAgent(gid, val);
+    await fetchAgentStatus(gid);
+  }, 'Sending...');
 }
 
 // ── Guide (send feedback to running agent) ──
 
 async function guideAgent(gid, btn) {
-  if (_isBusy(gid)) return;
   const input = document.getElementById(`agent-guide-${gid}`);
   const feedback = input?.value?.trim();
   if (!feedback) { showToast('Type your guidance first', 'error'); return; }
 
-  return _withLoading(btn, gid, async () => {
-    try {
-      const res = await fetch(`/api/agent/guide/${gid}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedback }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.detail || 'Failed to send guidance', 'error');
-        return;
-      }
-      if (input) input.value = '';
-      showToast('Guidance sent — agent will resume with your feedback');
-    } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-  });
+  return CardUI.wrap(gid, async () => {
+    const res = await fetch(`/api/agent/guide/${gid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Failed to send guidance', 'error');
+      return;
+    }
+    if (input) input.value = '';
+    showToast('Guidance sent — agent will resume with your feedback');
+  }, 'Sending...');
 }
 
 // ── QA Review ──
 
 async function approveQAReview(gid, btn) {
-  if (btn) return _withLoading(btn, gid, async () => {
+  return CardUI.wrap(gid, async () => {
     await answerAgent(gid, 'Approve');
     await fetchAgentStatus(gid);
-  });
-  await answerAgent(gid, 'Approve');
-  await fetchAgentStatus(gid);
+  }, 'Approving...');
 }
 
 async function rejectQAReview(gid, btn) {
   const input = document.getElementById(`qa-feedback-${gid}`);
   const feedback = input?.value?.trim();
   const answer = feedback ? `Reject: ${feedback}` : 'Reject';
-  if (btn) return _withLoading(btn, gid, async () => {
+  return CardUI.wrap(gid, async () => {
     await answerAgent(gid, answer);
     await fetchAgentStatus(gid);
-  });
-  await answerAgent(gid, answer);
-  await fetchAgentStatus(gid);
+  }, 'Rejecting...');
 }
 
 async function runManualQA(gid, btn) {
-  const action = async () => {
-    try {
-      const res = await fetch(`/api/agent/qa/${gid}`, { method: 'POST' });
-      if (res.ok) {
-        showToast('QA review started');
-        await fetchAgentStatus(gid);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.detail || 'Failed to start QA', 'error');
-      }
-    } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-  };
-  if (btn) return _withLoading(btn, gid, action);
-  await action();
+  return CardUI.wrap(gid, async () => {
+    const res = await fetch(`/api/agent/qa/${gid}`, { method: 'POST' });
+    if (res.ok) {
+      showToast('QA review started');
+      await fetchAgentStatus(gid);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Failed to start QA', 'error');
+    }
+  }, 'Running QA...');
 }
 
 async function runManualTest(gid, btn) {
-  const action = async () => {
-    try {
-      const res = await fetch(`/api/agent/test/${gid}`, { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        showToast(data.all_passed ? 'All tests passed' : 'Tests failed', data.all_passed ? 'success' : 'error');
-        await fetchAgentStatus(gid);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        showToast(err.detail || 'Failed to run tests', 'error');
-      }
-    } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
-  };
-  if (btn) return _withLoading(btn, gid, action);
-  await action();
+  return CardUI.wrap(gid, async () => {
+    const res = await fetch(`/api/agent/test/${gid}`, { method: 'POST' });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(data.all_passed ? 'All tests passed' : 'Tests failed', data.all_passed ? 'success' : 'error');
+      await fetchAgentStatus(gid);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Failed to run tests', 'error');
+    }
+  }, 'Running tests...');
 }
 
 function toggleAgentLogs(gid) {
