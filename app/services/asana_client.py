@@ -15,12 +15,25 @@ def _headers() -> dict:
     return {"Authorization": f"Bearer {ASANA_PAT}"}
 
 
-async def _paginated_get(url: str, params: dict, headers: dict) -> list[dict]:
-    """Generic paginated GET helper."""
+async def _paginated_get(url: str, params: dict, headers: dict, retries: int = 2) -> list[dict]:
+    """Generic paginated GET helper with retry on transient connection errors."""
+    import asyncio
     results = []
     async with httpx.AsyncClient(timeout=30) as client:
         while url:
-            resp = await client.get(url, headers=headers, params=params)
+            last_exc = None
+            for attempt in range(1 + retries):
+                try:
+                    resp = await client.get(url, headers=headers, params=params)
+                    last_exc = None
+                    break
+                except httpx.ConnectError as e:
+                    last_exc = e
+                    if attempt < retries:
+                        log.warning("Asana connection error (attempt %d/%d): %s", attempt + 1, retries + 1, e)
+                        await asyncio.sleep(1 * (attempt + 1))
+            if last_exc:
+                raise last_exc
             if resp.status_code != 200:
                 raise HTTPException(resp.status_code, f"Asana API error: {resp.text}")
             body = resp.json()

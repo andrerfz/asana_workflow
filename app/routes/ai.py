@@ -1,11 +1,14 @@
 """AI classification routes."""
 import os
+import logging
 from fastapi import APIRouter, HTTPException
 
 from ..services.asana_client import fetch_tasks
 from ..services.ai_classifier import ai_classify_task, ai_classify_batch, clear_cache
 from ..services.storage import load_overrides, save_overrides
 from ..services.task_cache import refresh_cache
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
@@ -34,7 +37,10 @@ async def ai_classify_all(force: bool = False):
 
     local_data["overrides"] = overrides
     save_overrides(local_data)
-    await refresh_cache()
+    try:
+        await refresh_cache()
+    except Exception as e:
+        log.warning("Cache refresh failed after classify-all (results saved): %s", e)
     return {"classified": applied, "total": len(active)}
 
 
@@ -63,7 +69,10 @@ async def ai_classify_single(task_gid: str, force: bool = False):
     }
     local_data["overrides"] = overrides
     save_overrides(local_data)
-    await refresh_cache()
+    try:
+        await refresh_cache()
+    except Exception as e:
+        log.warning("Cache refresh failed after classify (result saved): %s", e)
     return {"status": "ok", "classification": result}
 
 
