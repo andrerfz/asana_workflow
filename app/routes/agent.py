@@ -17,7 +17,7 @@ from ..agent import (
     load_memory, clear_memory, get_all_memory_repos,
 )
 from ..services.asana_client import fetch_task_stories, fetch_subtasks
-from ..services.task_cache import get_cached_tasks
+from ..services.task_cache import get_cached_tasks, refresh_cache
 from ..services.repo_manager import (
     get_task_repo_override, set_task_repo_override,
     load_task_repo_overrides,
@@ -124,9 +124,13 @@ async def get_branch_suggestions(task_gid: str):
 @router.post("/start/{task_gid}")
 async def start_task_agent(task_gid: str, body: StartAgent):
     """Start an AI agent for a task."""
-    # Find the task in cache
+    # Find the task in cache; if missing, refresh once and retry
     tasks, _ = get_cached_tasks()
     task = next((t for t in tasks if t["task_gid"] == task_gid), None)
+    if not task:
+        await refresh_cache()
+        tasks, _ = get_cached_tasks()
+        task = next((t for t in tasks if t["task_gid"] == task_gid), None)
     if not task:
         raise HTTPException(404, f"Task {task_gid} not found in cache")
 

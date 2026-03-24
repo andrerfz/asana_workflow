@@ -246,8 +246,6 @@ async def guide_agent(task_gid: str, feedback: str) -> bool:
     run = load_agent_run(task_gid)
     if not run:
         return False
-    if not run.get("is_active"):
-        return False
     worker = _active_workers.get(task_gid)
     if not worker or worker.done():
         return False
@@ -497,16 +495,16 @@ async def _run_agent(task_gid: str, task: dict):
             if _check_timeout(task_gid):
                 return
             run = load_agent_run(task_gid)
-            update_phase(task_gid, AgentPhase.CODING)
-            await _broadcast_state(task_gid)
-
-            coding_context = task_context
             run["qa_report"] = None
             run["question"] = None
             for repo_entry in run["repos"]:
                 if repo_entry.get("worktree_path") and repo_entry["status"] == "done":
                     repo_entry["status"] = "coding"
             save_agent_run(task_gid, run)
+            update_phase(task_gid, AgentPhase.CODING)
+            await _broadcast_state(task_gid)
+
+            coding_context = task_context
             if qa_feedback:
                 coding_context += f"\n\n{qa_feedback}\n\nIMPORTANT: Your code was reviewed and needs fixes. Focus ONLY on fixing the specific issues listed above. Do NOT rewrite code that is already working. Make targeted, minimal fixes."
 
@@ -624,6 +622,7 @@ async def _run_agent(task_gid: str, task: dict):
                     user_feedback = qa_answer.strip()
                 qa_feedback = _build_fix_instructions(qa_report, user_feedback)
                 add_log(task_gid, f"QA rejected — looping back to coding with feedback")
+                await _broadcast_state(task_gid)
                 continue
 
         # ═══ END CODING-QA LOOP ═══
@@ -1603,6 +1602,7 @@ async def trigger_manual_qa(task_gid: str, task: dict):
                             repo_entry["status"] = "coding"
                     save_agent_run(task_gid, current_run)
                     add_log(task_gid, "QA rejected — looping back to coding")
+                    await _broadcast_state(task_gid)
                     continue
 
             # DONE
