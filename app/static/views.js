@@ -637,13 +637,11 @@ function setView(view, el) {
   if (view === 'history' || view === 'agents') {
     sidebar.style.display = 'none';
     summaryBar.style.display = 'none';
-    renderTasks();
   } else {
     sidebar.style.display = 'block';
     summaryBar.style.display = 'flex';
-    renderTasks();
-    renderCharts();
   }
+  render();
 }
 
 function sortBy(field) {
