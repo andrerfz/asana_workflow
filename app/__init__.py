@@ -23,6 +23,7 @@ from .routes.history import router as history_router
 from .routes.repos import router as repos_router
 from .routes.worktrees import router as worktrees_router
 from .routes.agent import router as agent_router
+from .routes.guides import router as guides_router
 
 log = logging.getLogger(__name__)
 
@@ -84,27 +85,36 @@ app.include_router(history_router)
 app.include_router(repos_router)
 app.include_router(worktrees_router)
 app.include_router(agent_router)
+app.include_router(guides_router)
 
 # ── IDE integration ──
 
 @app.post("/api/ide/open")
 async def open_in_ide(body: dict):
-    """Open a path in a desktop IDE via macOS `open -a`."""
+    """Open a path in a desktop IDE via macOS `open -a` or CLI command."""
     import subprocess as _sp
     from fastapi import HTTPException as _HTTPException
     app_name = body.get("app", "")
+    cli = body.get("cli", "")
+    cli_args = body.get("cliArgs", [])
     path = body.get("path", "")
-    if not app_name or not path:
-        raise _HTTPException(400, "app and path are required")
-    # Validate path exists and is within worktree base
+    if (not app_name and not cli) or not path:
+        raise _HTTPException(400, "app or cli, and path are required")
+    # Validate path exists
     import os as _os
     real_path = _os.path.realpath(path)
     if not _os.path.exists(real_path):
         raise _HTTPException(404, f"Path not found: {path}")
     try:
-        _sp.Popen(["open", "-a", app_name, real_path])
+        if cli:
+            # CLI-based IDEs (VS Code, Cursor) — supports -r to reuse window
+            cmd = [cli] + (cli_args or []) + [real_path]
+            _sp.Popen(cmd)
+        else:
+            # macOS `open -a` for JetBrains IDEs (naturally reuses existing window)
+            _sp.Popen(["open", "-a", app_name, real_path])
     except Exception as e:
-        raise _HTTPException(500, f"Failed to open {app_name}: {e}")
+        raise _HTTPException(500, f"Failed to open IDE: {e}")
     return {"status": "ok"}
 
 # Static files

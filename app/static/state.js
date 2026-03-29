@@ -59,21 +59,21 @@ const CLUSTERS_META = {
 };
 
 const PHASE_COLORS = {
-  queued:'#6b7280', init:'#8b5cf6', planning:'#d97706', awaiting_approval:'#eab308',
-  coding:'#3b82f6', testing:'#22c55e', qa_review:'#a855f7', done:'#8b5cf6', error:'#ef4444',
-  paused:'#eab308', cancelled:'#4b5563',
+  queued:'#6b7280', init:'#8b5cf6', investigating:'#0ea5e9', planning:'#d97706',
+  awaiting_approval:'#eab308', coding:'#3b82f6', testing:'#22c55e', qa_review:'#a855f7',
+  done:'#8b5cf6', error:'#ef4444', paused:'#eab308', cancelled:'#4b5563',
 };
 const PHASE_LABELS = {
-  queued:'Queued', init:'Init', planning:'Planning', awaiting_approval:'Awaiting Approval',
-  coding:'Coding', testing:'Testing', qa_review:'QA Review', done:'Done', error:'Error',
-  paused:'Paused', cancelled:'Cancelled',
+  queued:'Queued', init:'Init', investigating:'Investigating', planning:'Planning',
+  awaiting_approval:'Awaiting Approval', coding:'Coding', testing:'Testing',
+  qa_review:'QA Review', done:'Done', error:'Error', paused:'Paused', cancelled:'Cancelled',
 };
 
 const IDE_OPTIONS = [
-  { id: 'phpstorm', name: 'PhpStorm', app: 'PhpStorm' },
-  { id: 'vscode', name: 'VS Code', protocol: 'vscode://file/{path}' },
-  { id: 'cursor', name: 'Cursor', protocol: 'cursor://file/{path}' },
-  { id: 'webstorm', name: 'WebStorm', app: 'WebStorm' },
-  { id: 'idea', name: 'IntelliJ IDEA', app: 'IntelliJ IDEA' },
+  { id: 'phpstorm', name: 'PhpStorm', cli: '/Applications/PhpStorm.app/Contents/MacOS/phpstorm', cliArgs: [] },
+  { id: 'vscode', name: 'VS Code', cli: 'code', cliArgs: ['-r'] },
+  { id: 'cursor', name: 'Cursor', cli: 'cursor', cliArgs: ['-r'] },
+  { id: 'webstorm', name: 'WebStorm', cli: '/Applications/WebStorm.app/Contents/MacOS/webstorm', cliArgs: [] },
+  { id: 'idea', name: 'IntelliJ IDEA', cli: '/Applications/IntelliJ IDEA.app/Contents/MacOS/idea', cliArgs: [] },
   { id: 'sublime', name: 'Sublime Text', protocol: 'subl://open?file={path}' },
 ];

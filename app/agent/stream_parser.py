@@ -68,7 +68,7 @@ def extract_result_from_stream_lines(stdout_lines: list[str]) -> str:
     Priority:
     1. "result" event's result field
     2. Last "assistant" message with text content
-    3. Longest text block from any "assistant" message
+    3. All text blocks from assistant messages (concatenated)
     4. Concatenated "content_block_delta" text fragments
     """
     # 1. Check for result event
@@ -80,7 +80,7 @@ def extract_result_from_stream_lines(stdout_lines: list[str]) -> str:
         except (json.JSONDecodeError, KeyError):
             continue
 
-    # 2. Try last assistant message
+    # 2. Try last assistant message with text
     for line in reversed(stdout_lines):
         try:
             ev = json.loads(line)
@@ -94,8 +94,9 @@ def extract_result_from_stream_lines(stdout_lines: list[str]) -> str:
         except (json.JSONDecodeError, KeyError):
             continue
 
-    # 3. Longest text block from any assistant message + content_block_delta
+    # 3. Collect ALL text blocks from all assistant messages (handles multi-turn)
     all_texts = []
+    delta_texts = []
     for line in stdout_lines:
         try:
             ev = json.loads(line)
@@ -109,14 +110,19 @@ def extract_result_from_stream_lines(stdout_lines: list[str]) -> str:
             elif ev.get("type") == "content_block_delta":
                 delta = ev.get("delta", {})
                 if delta.get("type") == "text_delta":
-                    t = delta.get("text", "").strip()
+                    t = delta.get("text", "")
                     if t:
-                        all_texts.append(t)
+                        delta_texts.append(t)
         except (json.JSONDecodeError, KeyError):
             continue
 
+    # Prefer concatenated assistant texts (full blocks) over deltas
     if all_texts:
-        return max(all_texts, key=len)
+        return "\n\n".join(all_texts)
+
+    # Fall back to concatenated deltas
+    if delta_texts:
+        return "".join(delta_texts).strip()
 
     return ""
 

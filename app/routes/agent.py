@@ -7,6 +7,7 @@ from typing import Optional
 
 from ..agent import (
     start_agent, stop_agent, answer_question, guide_agent,
+    resume_agent,
     get_agent_status, list_active_agents,
     check_claude_code_status, clear_agent_run,
     get_workflow_graph, get_worktree_diff, load_agent_run,
@@ -185,6 +186,36 @@ class GuideAgent(BaseModel):
         if not v or not v.strip():
             raise ValueError("Feedback cannot be empty")
         return v.strip()
+
+
+class ResumeAgent(BaseModel):
+    feedback: str
+
+    @field_validator("feedback")
+    @classmethod
+    def validate_feedback(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Feedback cannot be empty")
+        return v.strip()
+
+
+@router.post("/resume/{task_gid}")
+async def resume_task_agent(task_gid: str, body: ResumeAgent):
+    """Resume a done/error agent with user feedback, reusing existing worktrees."""
+    tasks, _ = get_cached_tasks()
+    task = next((t for t in tasks if t["task_gid"] == task_gid), None)
+    if not task:
+        await refresh_cache()
+        tasks, _ = get_cached_tasks()
+        task = next((t for t in tasks if t["task_gid"] == task_gid), None)
+    if not task:
+        raise HTTPException(404, f"Task {task_gid} not found in cache")
+
+    try:
+        run = await resume_agent(task_gid, task, body.feedback)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return run
 
 
 @router.post("/guide/{task_gid}")

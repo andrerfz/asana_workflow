@@ -260,10 +260,18 @@ function handleRepoSelection(gid, selectEl) {
     renderTasks();
     return;
   }
-  const newRepos = [val];
-  taskRepoOverrides[gid] = newRepos;
-  updateTaskRepos(gid, newRepos);
-  selectEl.value = '';
+  // Toggle: add if not assigned, remove if already assigned
+  const task = allTasks.find(t => t.task_gid === gid);
+  const taskArea = task ? task.area : '';
+  const current = (taskRepoOverrides[gid] || (areaRepoMap[taskArea] || [])).slice();
+  const idx = current.indexOf(val);
+  if (idx >= 0) {
+    current.splice(idx, 1);
+  } else {
+    current.push(val);
+  }
+  taskRepoOverrides[gid] = current;
+  updateTaskRepos(gid, current);
   renderTasks();
 }
 
@@ -361,6 +369,31 @@ async function guideAgent(gid, btn) {
     if (input) input.value = '';
     showToast('Guidance sent — agent will resume with your feedback');
   }, 'Sending...');
+}
+
+// ── Resume with Feedback ──
+
+async function resumeAgent(gid, btn) {
+  const input = document.getElementById(`agent-resume-${gid}`);
+  const feedback = input?.value?.trim();
+  if (!feedback) { showToast('Describe what the agent should do', 'error'); return; }
+
+  return CardUI.wrap(gid, async () => {
+    const res = await fetch(`/api/agent/resume/${gid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Failed to resume agent', 'error');
+      return;
+    }
+    const run = await res.json();
+    agentStatuses[gid] = run;
+    renderTasks();
+    showToast('Agent resumed with your feedback');
+  }, 'Resuming...');
 }
 
 // ── QA Review ──

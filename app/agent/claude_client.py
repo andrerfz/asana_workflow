@@ -123,9 +123,13 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
     if resume_session_id:
         cmd.extend(["--resume", resume_session_id])
 
-    if allowed_tools:
-        for tool in allowed_tools:
-            cmd.extend(["--allowedTools", tool])
+    if allowed_tools is not None:
+        if len(allowed_tools) == 0:
+            # Empty list = no tools allowed; use a non-existent tool name to block all
+            cmd.extend(["--allowedTools", "__none__"])
+        else:
+            for tool in allowed_tools:
+                cmd.extend(["--allowedTools", tool])
 
     if system_prompt:
         cmd.extend(["--system-prompt", system_prompt])

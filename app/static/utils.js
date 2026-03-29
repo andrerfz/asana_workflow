@@ -94,13 +94,13 @@ function saveIDEPreference(ide) {
 }
 function openInIDE(path) {
   const pref = getIDEPreference();
-  if (!pref.protocol && !pref.app) { openSettings(); switchSettingsTab('ide'); return; }
-  if (pref.app) {
-    // JetBrains IDEs: use backend to open via `open -a` (protocol URLs don't handle directories well)
+  if (!pref.protocol && !pref.app && !pref.cli) { openSettings(); switchSettingsTab('ide'); return; }
+  if (pref.app || pref.cli) {
+    // Use backend to open via CLI or `open -a` (reuses existing window)
     fetch('/api/ide/open', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ app: pref.app, path }),
+      body: JSON.stringify({ app: pref.app, cli: pref.cli, cliArgs: pref.cliArgs, path }),
     }).then(r => { if (!r.ok) r.json().then(e => showToast(e.detail || 'Failed to open IDE', 'error')); })
       .catch(e => showToast(`Error: ${e.message}`, 'error'));
     return;

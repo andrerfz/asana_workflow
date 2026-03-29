@@ -197,8 +197,9 @@ function agentPanelHTML(gid, agent) {
     </div>`;
   }
 
-  // Guide input — available during any active phase (except those with dedicated inputs)
-  if (agent.is_active && !['awaiting_approval', 'paused', 'queued'].includes(agent.phase)) {
+  // Guide input — available during any working phase (coding, testing, investigating, planning, qa_review)
+  const guidePhases = ['coding', 'testing', 'investigating', 'planning', 'qa_review', 'init'];
+  if (guidePhases.includes(agent.phase)) {
     html += `<div class="agent-guide" style="margin-bottom:8px;padding:10px 12px;background:rgba(59,130,246,0.07);border-left:3px solid #3b82f6;border-radius:4px">
       <div style="font-size:11px;font-weight:600;color:#3b82f6;margin-bottom:6px">Guide Agent</div>
       <div style="display:flex;gap:6px;align-items:flex-end">
@@ -206,6 +207,14 @@ function agentPanelHTML(gid, agent) {
         <button class="btn btn-primary" onclick="guideAgent('${gid}',this)" ${dis} style="align-self:flex-end;font-size:11px;padding:4px 12px">Send</button>
       </div>
     </div>`;
+  }
+
+  // Investigation report (collapsible, shown when available)
+  if (agent.investigation && ['awaiting_approval', 'planning', 'coding', 'testing', 'qa_review', 'done'].includes(agent.phase)) {
+    html += `<details class="agent-investigation" style="margin-bottom:8px;padding:8px 12px;background:rgba(14,165,233,0.06);border-left:3px solid #0ea5e9;border-radius:4px">
+      <summary style="font-size:11px;font-weight:600;color:#0ea5e9;cursor:pointer">Investigation Report</summary>
+      <pre style="margin-top:6px;font-size:11px;white-space:pre-wrap;color:var(--text2);max-height:300px;overflow-y:auto">${esc(agent.investigation)}</pre>
+    </details>`;
   }
 
   // Plan approval (show during awaiting_approval and planning/revise)
@@ -318,6 +327,18 @@ function agentPanelHTML(gid, agent) {
     html += `<div class="agent-error">
       <span style="color:var(--red);font-size:12px">${esc(agent.error)}</span>
       <button class="btn-icon" onclick="startAgent('${gid}')" title="Retry" style="margin-left:8px">&#x1F504;</button>
+    </div>`;
+  }
+
+  // Resume with feedback — available on done/error when worktrees exist
+  if (['done', 'error'].includes(agent.phase) && agent.repos && agent.repos.some(r => r.worktree_path)) {
+    html += `<div class="agent-resume" style="margin-top:8px;padding:10px 12px;background:rgba(245,158,11,0.07);border-left:3px solid #f59e0b;border-radius:4px">
+      <div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:6px">Resume with Feedback</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Continue from where the agent left off. Describe what to fix, add, or change.</div>
+      <div style="display:flex;gap:6px;align-items:flex-end">
+        <textarea class="form-input" id="agent-resume-${gid}" placeholder="e.g. Fix the validation on the email field, also add unit tests..." rows="2" style="flex:1;font-size:12px;resize:vertical;min-height:44px" ${busy?'disabled':''}></textarea>
+        <button class="btn" onclick="resumeAgent('${gid}',this)" ${dis} style="align-self:flex-end;font-size:11px;padding:4px 12px;background:#f59e0b;color:#fff;border:none;border-radius:4px;font-weight:600">Resume</button>
+      </div>
     </div>`;
   }
 

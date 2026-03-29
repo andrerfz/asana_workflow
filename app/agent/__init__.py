@@ -24,7 +24,7 @@ from .state import (
 from .claude_client import check_claude_code_status
 from .executor import (
     start_agent, stop_agent, answer_question, guide_agent,
-    trigger_manual_qa, run_manual_tests,
+    resume_agent, trigger_manual_qa, run_manual_tests,
 )
 from .queue import agent_queue
 from .memory import (

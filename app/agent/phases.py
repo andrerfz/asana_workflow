@@ -6,6 +6,7 @@ from enum import Enum
 class AgentPhase(str, Enum):
     QUEUED = "queued"
     INIT = "init"
+    INVESTIGATING = "investigating"
     PLANNING = "planning"
     AWAITING_APPROVAL = "awaiting_approval"
     CODING = "coding"
@@ -19,7 +20,8 @@ class AgentPhase(str, Enum):
     @property
     def color(self):
         return {
-            "queued": "#6b7280", "init": "#8b5cf6", "planning": "#d97706",
+            "queued": "#6b7280", "init": "#8b5cf6", "investigating": "#0ea5e9",
+            "planning": "#d97706",
             "awaiting_approval": "#eab308", "coding": "#3b82f6", "testing": "#22c55e",
             "done": "#8b5cf6", "error": "#ef4444", "paused": "#eab308",
             "cancelled": "#4b5563",
@@ -47,12 +49,20 @@ WORKFLOW_GRAPH: dict = {
             "row": 0, "col": 1,
         },
         {
+            "id": "investigating",
+            "label": "Investigating",
+            "icon": "🔎",
+            "color": "#0ea5e9",
+            "desc": "Claude Code explores the codebase with read-only tools.\nReads CLAUDE.md guides, inspects project structure and related repos.\nProduces investigation report for the planning phase.",
+            "row": 0, "col": 2,
+        },
+        {
             "id": "planning",
             "label": "Planning",
             "icon": "📋",
             "color": "#d97706",
-            "desc": "Claude Code generates implementation plan.\nContext includes: task details, Asana comments, codebase.\nPlan posted as Asana comment.",
-            "row": 0, "col": 2,
+            "desc": "Claude Code generates implementation plan.\nContext includes: task details, investigation report, Asana comments.\nPlan posted as Asana comment.",
+            "row": 0, "col": 3,
         },
         {
             "id": "awaiting_approval",
@@ -60,7 +70,7 @@ WORKFLOW_GRAPH: dict = {
             "icon": "⏳",
             "color": "#eab308",
             "desc": "Plan shown in dashboard for review.\nUser can: Approve / Reject / Revise with feedback.\nRevise loops back to Planning with feedback context.",
-            "row": 0, "col": 3,
+            "row": 0, "col": 4,
         },
         {
             "id": "coding",
@@ -121,7 +131,8 @@ WORKFLOW_GRAPH: dict = {
     ],
     "edges": [
         {"from": "queued", "to": "init", "type": "main"},
-        {"from": "init", "to": "planning", "type": "main"},
+        {"from": "init", "to": "investigating", "type": "main"},
+        {"from": "investigating", "to": "planning", "type": "main"},
         {"from": "planning", "to": "awaiting_approval", "type": "main"},
         {"from": "awaiting_approval", "to": "coding", "type": "main", "label": "Approved"},
         {"from": "awaiting_approval", "to": "planning", "type": "loop", "label": "Revise"},
@@ -133,6 +144,7 @@ WORKFLOW_GRAPH: dict = {
         {"from": "qa_review", "to": "coding", "type": "loop", "label": "Reject"},
         # Error edges — any active phase can error
         {"from": "init", "to": "error", "type": "error"},
+        {"from": "investigating", "to": "error", "type": "error"},
         {"from": "planning", "to": "error", "type": "error"},
         {"from": "coding", "to": "error", "type": "error"},
         {"from": "rebase", "to": "error", "type": "error"},

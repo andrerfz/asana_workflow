@@ -27,7 +27,7 @@ from .asana_helpers import (
 )
 from .stream_parser import extract_text_from_stream, detect_infra_error
 from .queue import agent_queue
-from ..services.repo_manager import get_repo, get_repos_for_task
+from ..services.repo_manager import get_repo, get_repos_for_task, list_repos
 from ..services.worktree_manager import create_worktree, get_worktree_status
 from ..services.asana_client import fetch_subtasks
 from .memory import get_memory_context, update_memory_after_run
@@ -166,6 +166,106 @@ async def start_agent(task_gid: str, task: dict, branch_slug: str,
 
         worker = asyncio.create_task(run_with_timeout())
         _active_workers[task_gid] = worker  # replace sentinel with actual worker
+        agent_queue.register_running(task_gid, worker)
+        return load_agent_run(task_gid)
+    except Exception:
+        _active_workers.pop(task_gid, None)
+        raise
+
+
+async def resume_agent(task_gid: str, task: dict, feedback: str) -> dict:
+    """Resume a done/error agent with user feedback, reusing existing worktrees.
+
+    Skips investigation and planning — jumps straight to coding with the
+    user's feedback injected as context alongside the previous run's plan
+    and investigation.
+    """
+    if task_gid in _active_workers and not _active_workers[task_gid].done():
+        raise ValueError(f"Agent already running for task {task_gid}")
+
+    prev_run = load_agent_run(task_gid)
+    if not prev_run:
+        raise ValueError("No previous agent run to resume")
+    if prev_run["phase"] not in (AgentPhase.DONE.value, AgentPhase.ERROR.value, AgentPhase.CANCELLED.value):
+        raise ValueError(f"Can only resume from done/error/cancelled, current phase: {prev_run['phase']}")
+
+    # Validate worktrees still exist
+    valid_repos = []
+    for repo_entry in prev_run.get("repos", []):
+        wt = repo_entry.get("worktree_path")
+        if wt and Path(wt).exists():
+            valid_repos.append(repo_entry)
+    if not valid_repos:
+        raise ValueError("No valid worktrees remain — use Start Agent instead")
+
+    # Check if previous investigation flagged additional repos that were never created
+    prev_investigation = prev_run.get("investigation", "")
+    if prev_investigation:
+        missing_repos = _parse_additional_repos(prev_investigation, {"repos": valid_repos})
+        if missing_repos:
+            # Extract branch slug from existing worktree
+            existing_branch = next((r.get("branch", "") for r in valid_repos if r.get("branch")), "")
+            slug_parts = existing_branch.split("/")
+            slug = slug_parts[-1] if len(slug_parts) >= 3 else "work"
+            log.info("Resume: creating worktrees for previously identified repos: %s", missing_repos)
+            for repo_id in missing_repos:
+                try:
+                    wt = create_worktree(task_gid, repo_id, slug)
+                    new_entry = {"id": repo_id, "status": "coding", "commits": 0,
+                                 "worktree_path": wt["path"], "branch": wt["branch"]}
+                    valid_repos.append(new_entry)
+                    repo = get_repo(repo_id)
+                    if repo:
+                        _sync_agent_files(repo["path"], wt["path"], repo_id, task_gid)
+                    log.info("Resume: created worktree for %s at %s", repo_id, wt["path"])
+                except Exception as e:
+                    log.warning("Failed to create worktree for missing repo %s on resume: %s", repo_id, e)
+
+    # Claim slot
+    _sentinel = asyncio.get_event_loop().create_future()
+    _active_workers[task_gid] = _sentinel
+
+    try:
+        cli_status = check_claude_code_status()
+        if not cli_status["available"]:
+            raise ValueError(cli_status["error"])
+
+        # Preserve previous context
+        prev_plan = prev_run.get("plan", "")
+        prev_error = prev_run.get("error", "")
+
+        # Reset the run state for a new cycle, keeping repos/worktrees
+        for repo_entry in valid_repos:
+            repo_entry["status"] = "coding"
+        prev_run["phase"] = AgentPhase.CODING.value
+        prev_run["is_active"] = True
+        prev_run["error"] = None
+        prev_run["qa_report"] = None
+        prev_run["question"] = None
+        prev_run["completed_at"] = None
+        prev_run["resume_feedback"] = feedback
+        prev_run["repos"] = valid_repos
+        save_agent_run(task_gid, prev_run)
+        update_phase(task_gid, AgentPhase.CODING)
+        await _broadcast_state(task_gid)
+        add_log(task_gid, f"Resuming with feedback: {feedback[:200]}")
+
+        # Set up timeout
+        settings = load_agent_settings()
+        timeout_minutes = settings.get("agent_timeout_minutes", 45)
+        _agent_timers[task_gid] = _AgentTimer(timeout_minutes * 60)
+
+        async def run_resumed():
+            try:
+                return await _run_agent_resumed(
+                    task_gid, task, feedback,
+                    prev_plan, prev_investigation, prev_error,
+                )
+            finally:
+                _agent_timers.pop(task_gid, None)
+
+        worker = asyncio.create_task(run_resumed())
+        _active_workers[task_gid] = worker
         agent_queue.register_running(task_gid, worker)
         return load_agent_run(task_gid)
     except Exception:
@@ -408,6 +508,47 @@ async def _run_agent(task_gid: str, task: dict):
         settings = load_agent_settings()
         if settings.get("section_on_start"):
             await _move_task_section(task_gid, settings["section_on_start"])
+
+        # Phase: INVESTIGATING — explore codebase before planning
+        update_phase(task_gid, AgentPhase.INVESTIGATING)
+        await _broadcast_state(task_gid)
+        add_log(task_gid, "Investigating codebase...")
+
+        investigation = await _agent_investigate(task_gid, task_context, run)
+        if investigation:
+            run = load_agent_run(task_gid)
+            run["investigation"] = investigation
+            save_agent_run(task_gid, run)
+            task_context += f"\n\n## Investigation Report\n{investigation}"
+
+            # Check if investigation recommends additional repos
+            try:
+                additional = _parse_additional_repos(investigation, run)
+            except Exception as e:
+                log.exception("Failed to parse additional repos from investigation")
+                add_log(task_gid, f"Failed to parse additional repos: {e}", "warning")
+                additional = []
+            if additional:
+                add_log(task_gid, f"Investigation recommends additional repos: {', '.join(additional)}")
+                # Extract branch slug from existing worktree branch name
+                existing_branch = next((r.get("branch", "") for r in run["repos"] if r.get("branch")), "")
+                # Branch format: feature/{task_gid}/{slug} — extract the slug
+                slug_parts = existing_branch.split("/")
+                slug = slug_parts[-1] if len(slug_parts) >= 3 else "work"
+                for repo_id in additional:
+                    try:
+                        wt = create_worktree(task_gid, repo_id, slug)
+                        new_entry = {"id": repo_id, "status": "ready", "commits": 0,
+                                     "worktree_path": wt["path"], "branch": wt["branch"]}
+                        run["repos"].append(new_entry)
+                        add_log(task_gid, f"Added repo {repo_id}: {wt['path']} (branch: {wt['branch']})")
+                    except Exception as e:
+                        add_log(task_gid, f"Failed to add repo {repo_id}: {e}", "warning")
+                save_agent_run(task_gid, run)
+                await _broadcast_state(task_gid)
+                # Rebuild task context with new repos
+                task_context = _build_task_context(task, run) + comments_context + subtasks_context + qa_context + branch_state
+                task_context += f"\n\n## Investigation Report\n{investigation}"
 
         # Phase: PLANNING
         update_phase(task_gid, AgentPhase.PLANNING)
@@ -671,6 +812,221 @@ async def _run_agent(task_gid: str, task: dict):
         agent_queue.unregister_running(task_gid)
 
 
+async def _run_agent_resumed(task_gid: str, task: dict, feedback: str,
+                             prev_plan: str, prev_investigation: str,
+                             prev_error: str):
+    """Resumed agent run — skips investigation/planning, jumps to coding with feedback."""
+    try:
+        run = load_agent_run(task_gid)
+        if not run:
+            return
+
+        comments_context = await _fetch_task_comments(task_gid)
+        subtasks_context = await _fetch_subtasks_context(task_gid)
+        branch_state = _get_branch_state(run)
+
+        task_context = _build_task_context(task, run) + comments_context + subtasks_context + branch_state
+
+        if prev_investigation:
+            task_context += f"\n\n## Investigation Report (from previous run)\n{prev_investigation}"
+        if prev_plan:
+            task_context += f"\n\n## Implementation Plan (from previous run)\n{prev_plan}"
+
+        # Build resume context with user feedback
+        resume_section = "\n\n## Resume Feedback\n"
+        resume_section += "The agent previously ran on this task "
+        if prev_error:
+            resume_section += f"and encountered an error: {prev_error}\n\n"
+        else:
+            resume_section += "and completed.\n\n"
+        resume_section += (
+            f"The user is resuming with the following feedback:\n\n{feedback}\n\n"
+            "IMPORTANT: The branch already has previous work. Review what exists, "
+            "then apply ONLY the changes described in the feedback above. "
+            "Do NOT redo work that is already done."
+        )
+        task_context += resume_section
+
+        # Move task back to dev section
+        settings = load_agent_settings()
+        if settings.get("section_on_start"):
+            await _move_task_section(task_gid, settings["section_on_start"])
+
+        # Jump directly to coding → testing → QA loop
+        qa_feedback = ""
+        while True:
+            if _check_timeout(task_gid):
+                return
+            run = load_agent_run(task_gid)
+            run["qa_report"] = None
+            run["question"] = None
+            for repo_entry in run["repos"]:
+                if repo_entry.get("worktree_path") and repo_entry["status"] == "done":
+                    repo_entry["status"] = "coding"
+            save_agent_run(task_gid, run)
+            update_phase(task_gid, AgentPhase.CODING)
+            await _broadcast_state(task_gid)
+
+            coding_context = task_context
+            if qa_feedback:
+                coding_context += f"\n\n{qa_feedback}\n\nIMPORTANT: Your code was reviewed and needs fixes. Focus ONLY on fixing the specific issues listed above. Do NOT rewrite code that is already working. Make targeted, minimal fixes."
+
+            coded_any = False
+            for repo_entry in run["repos"]:
+                if not repo_entry.get("worktree_path"):
+                    continue
+                if repo_entry["status"] == "done":
+                    continue
+                save_agent_run(task_gid, run)
+
+                success = await _agent_code(task_gid, coding_context, run, repo_entry)
+                if not success:
+                    return
+                run = load_agent_run(task_gid)
+                if not run or run["phase"] == AgentPhase.CANCELLED.value:
+                    return
+                coded_any = True
+                repo_entry["status"] = "done"
+                save_agent_run(task_gid, run)
+
+            if not coded_any:
+                add_log(task_gid, "No repos were coded — all skipped or none ready", "error")
+                update_phase(task_gid, AgentPhase.ERROR, error="No repos were coded")
+                return
+
+            # Rebase onto latest default branch
+            for repo_entry in run["repos"]:
+                if repo_entry.get("worktree_path"):
+                    success = await _rebase_from_default(task_gid, repo_entry)
+                    if not success:
+                        return
+
+            # Phase: TESTING
+            if _check_timeout(task_gid):
+                return
+            update_phase(task_gid, AgentPhase.TESTING)
+            await _broadcast_state(task_gid)
+
+            for repo_entry in run["repos"]:
+                repo = get_repo(repo_entry["id"])
+                if repo and repo_entry.get("worktree_path"):
+                    test_cmd = _select_test_cmd(repo, repo_entry["worktree_path"])
+                    if test_cmd:
+                        test_cwd = repo["path"] if (repo.get("test_docker_cmd") and not repo.get("test_worktree_cmd") and not repo.get("test_worktree_cmd_fast")) else repo_entry["worktree_path"]
+                        success = await _agent_test(task_gid, repo_entry, test_cmd, test_cwd)
+                        if not success:
+                            return
+
+            # Quality checks
+            quality = await _quality_checks(task_gid, run)
+            run = load_agent_run(task_gid)
+            run["quality_checks"] = quality
+            save_agent_run(task_gid, run)
+            if quality:
+                passed = sum(1 for c in quality if c["passed"])
+                add_log(task_gid, f"Quality: {passed}/{len(quality)} checks passed")
+
+            # Phase: QA REVIEW
+            qa_report = await _agent_qa_review(task_gid, task, run)
+            if qa_report is None:
+                add_log(task_gid, "QA review failed — retrying once...", "warning")
+                qa_report = await _agent_qa_review(task_gid, task, run)
+            if not qa_report:
+                add_log(task_gid, "QA review could not produce a report — stopping", "error")
+                update_phase(task_gid, AgentPhase.ERROR, error="QA review failed to produce a report")
+                return
+
+            # QA auto-approved (PASS)
+            run = load_agent_run(task_gid)
+            if not run.get("question"):
+                add_log(task_gid, "QA auto-approved — skipping to done")
+                break
+
+            # Wait for QA approval
+            add_log(task_gid, "Waiting for QA approval...")
+            timer = _agent_timers.get(task_gid)
+            if timer:
+                timer.pause()
+
+            qa_answer = None
+            while True:
+                await asyncio.sleep(2)
+                run = load_agent_run(task_gid)
+                if not run:
+                    return
+                if run.get("phase") in (AgentPhase.CANCELLED.value, AgentPhase.ERROR.value):
+                    return
+                q = run.get("question")
+                if q and q.get("answer"):
+                    qa_answer = q["answer"]
+                    break
+
+            if timer:
+                timer.resume()
+
+            qa_lower = qa_answer.strip().lower()
+            run = load_agent_run(task_gid)
+            run["question"] = None
+            save_agent_run(task_gid, run)
+
+            if qa_lower in ("approve", "yes", "lgtm"):
+                add_log(task_gid, "QA approved — proceeding to done")
+                break
+            else:
+                user_feedback = ""
+                if qa_lower.startswith("reject"):
+                    user_feedback = qa_answer.strip()[len("reject"):].lstrip(": ").strip()
+                elif qa_lower not in ("no", "reject", "fix", "redo"):
+                    user_feedback = qa_answer.strip()
+                qa_feedback = _build_fix_instructions(qa_report, user_feedback)
+                add_log(task_gid, "QA rejected — looping back to coding with feedback")
+                await _broadcast_state(task_gid)
+                continue
+
+        # Phase: DONE
+        update_phase(task_gid, AgentPhase.DONE)
+        await _broadcast_state(task_gid)
+        add_log(task_gid, "Agent completed successfully (resumed run)")
+
+        settings = load_agent_settings()
+        if settings.get("section_on_done"):
+            await _move_task_section(task_gid, settings["section_on_done"])
+        run = load_agent_run(task_gid)
+        branches = ", ".join(r.get("branch", "?") for r in run.get("repos", []))
+        commit_total = sum(r.get("commits", 0) for r in run.get("repos", []))
+        await _post_asana_comment(
+            task_gid,
+            f"🤖 Agent completed (resumed).\n\nBranches: {branches}\nCommits: {commit_total}\n\n"
+            f"Review the changes and merge when ready.",
+            dedup_prefix="🤖 Agent completed (resumed)."
+        )
+
+        await _auto_complete_subtasks(task_gid, run)
+
+        for repo_entry in run.get("repos", []):
+            update_memory_after_run(repo_entry["id"], task_gid, run)
+
+    except asyncio.CancelledError:
+        update_phase(task_gid, AgentPhase.CANCELLED)
+        raise
+    except Exception as e:
+        log.exception("Resumed agent error for task %s", task_gid)
+        update_phase(task_gid, AgentPhase.ERROR, error=str(e))
+        add_log(task_gid, f"Agent error: {e}", "error")
+        await _broadcast_state(task_gid)
+        await _post_asana_comment(task_gid, f"🤖 Agent failed (resumed): {str(e)[:500]}", dedup_prefix="🤖 Agent failed (resumed):")
+        settings = load_agent_settings()
+        if settings.get("section_on_error"):
+            await _move_task_section(task_gid, settings["section_on_error"])
+        run = load_agent_run(task_gid)
+        if run:
+            for repo_entry in run.get("repos", []):
+                update_memory_after_run(repo_entry["id"], task_gid, run)
+    finally:
+        _active_workers.pop(task_gid, None)
+        agent_queue.unregister_running(task_gid)
+
+
 # ─── Context Building ───
 
 def _build_task_context(task: dict, run: dict) -> str:
@@ -722,6 +1078,152 @@ def _build_task_context(task: dict, run: dict) -> str:
 
 
 # ─── Phase Implementations ───
+
+
+def _load_claude_md_guides(run: dict) -> str:
+    """Load CLAUDE.md files from projects root and each configured repo."""
+    from ..config import PROJECTS_DIR
+    guides = []
+
+    # Global CLAUDE.md at projects root
+    if PROJECTS_DIR:
+        global_md = Path(PROJECTS_DIR) / "CLAUDE.md"
+        if global_md.exists():
+            try:
+                content = global_md.read_text()[:5000]
+                guides.append(f"## Global Project Guide (CLAUDE.md)\n{content}")
+            except OSError:
+                pass
+
+    # Per-repo CLAUDE.md files (including repos NOT assigned to this task)
+    all_repos = list_repos()
+    task_repo_ids = {r["id"] for r in run.get("repos", [])}
+    for repo_entry in all_repos:
+        repo_path = repo_entry.get("path", "")
+        if not repo_path:
+            continue
+        repo_md = Path(repo_path) / "CLAUDE.md"
+        if repo_md.exists():
+            try:
+                content = repo_md.read_text()[:3000]
+                label = "assigned" if repo_entry["id"] in task_repo_ids else "related"
+                guides.append(f"## {repo_entry['id']} CLAUDE.md ({label})\n{content}")
+            except OSError:
+                pass
+
+    if guides:
+        return "\n\n" + "\n\n".join(guides)
+    return ""
+
+
+def _parse_additional_repos(investigation: str, run: dict) -> list[str]:
+    """Parse ADDITIONAL_REPOS line from investigation report. Returns list of new repo IDs."""
+    import re
+    existing_ids = {r["id"] for r in run.get("repos", [])}
+    try:
+        all_repo_ids = {r["id"] for r in list_repos()}
+    except Exception as e:
+        log.error("Failed to list repos for additional repo parsing: %s", e)
+        return []
+
+    match = re.search(r"ADDITIONAL_REPOS:\s*(.+)", investigation)
+    if not match:
+        return []
+
+    log.info("ADDITIONAL_REPOS line found: %s", match.group().strip())
+    requested = [r.strip() for r in match.group(1).split(",") if r.strip()]
+    valid = []
+    for repo_id in requested:
+        if repo_id in existing_ids:
+            log.info("Additional repo %s already assigned — skipping", repo_id)
+            continue
+        if repo_id not in all_repo_ids:
+            log.warning("Investigation requested unknown repo: %s (available: %s)", repo_id, all_repo_ids)
+            continue
+        valid.append(repo_id)
+    return valid
+
+
+async def _agent_investigate(task_gid: str, context: str, run: dict) -> Optional[str]:
+    """Run the investigation phase — explore codebase with read-only tools before planning."""
+    try:
+        wt_path = run["repos"][0].get("worktree_path", ".")
+
+        # Build list of all repo paths for cross-project exploration
+        all_repos = list_repos()
+        repo_map = []
+        task_repo_ids = {r["id"] for r in run.get("repos", [])}
+        for repo_entry in all_repos:
+            label = "YOUR WORKTREE" if repo_entry["id"] in task_repo_ids else "related project"
+            path = repo_entry.get("path", "")
+            lang = repo_entry.get("language", "unknown")
+            repo_map.append(f"- {repo_entry['id']} ({label}, {lang}): {path}")
+        repos_section = "\n".join(repo_map) if repo_map else "No repos configured."
+
+        # Load CLAUDE.md guides
+        claude_guides = _load_claude_md_guides(run)
+
+        system = (
+            "You are a senior developer investigating a codebase BEFORE writing an implementation plan. "
+            "Your goal is to explore the code and produce a concise investigation report. "
+            "You have READ-ONLY access to all configured project repositories.\n\n"
+            "DO NOT modify any files. DO NOT create commits. DO NOT run destructive commands.\n\n"
+            "## What to investigate:\n"
+            "1. **Tech stack & structure**: Identify the language, framework, directory layout, and key patterns\n"
+            "2. **Relevant files**: Find the specific files, classes, and functions related to the task\n"
+            "3. **Dependencies**: Check if the task depends on other projects (e.g., shared migrations, APIs, shared models)\n"
+            "4. **Testing**: How does this project run tests? Are there test examples to follow?\n"
+            "5. **Gotchas**: Anything surprising (missing features you'd expect, unusual patterns)\n\n"
+            "## Available repositories:\n"
+            f"{repos_section}\n\n"
+            "You can freely read files from ANY of these repos using their full paths. "
+            "If the task mentions another project or you suspect cross-project dependencies, "
+            "investigate the related repos too.\n\n"
+            "## IMPORTANT: Additional repos needed\n"
+            "If after investigating you determine that this task REQUIRES changes in a repo that is NOT "
+            "currently assigned as YOUR WORKTREE, you MUST include a line at the very end of your report "
+            "in this exact format:\n\n"
+            "ADDITIONAL_REPOS: repo-id-1, repo-id-2\n\n"
+            "Only include repos from the available list above. Only request repos where code changes "
+            "are actually needed (e.g., migrations, shared models, API contracts). Do NOT request repos "
+            "just because they are related.\n\n"
+            "Output a structured investigation report with your findings. "
+            "Keep it under 800 words. Focus on FACTS you found in the code, not assumptions."
+        )
+
+        prompt = f"{context}{claude_guides}\n\nInvestigate the codebase and produce a report. Use Read, Glob, and Grep tools to explore."
+
+        result = await _run_claude_cli(
+            prompt=prompt,
+            cwd=wt_path,
+            max_turns=15,
+            allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)"],
+            system_prompt=system,
+            task_gid=task_gid,
+        )
+
+        report = result.get("text", "").strip()
+
+        try:
+            _accumulate_cost(task_gid, result)
+        except Exception as e:
+            log.warning(f"Failed to accumulate cost for investigation: {e}")
+
+        if result["returncode"] != 0 and not report:
+            error = result.get("stderr", "") or result.get("raw_output", "Unknown error")
+            add_log(task_gid, f"Investigation failed (exit {result['returncode']}): {error[:500]}", "error")
+            # Non-fatal — proceed to planning without investigation
+            return None
+
+        if report:
+            add_log(task_gid, f"Investigation complete ({len(report)} chars)")
+        return report
+
+    except Exception as e:
+        add_log(task_gid, f"Investigation failed: {e}", "warning")
+        # Non-fatal — proceed to planning without investigation
+        return None
+
 
 async def _agent_plan(task_gid: str, context: str, run: dict) -> Optional[str]:
     """Run the planning phase."""
@@ -1382,6 +1884,17 @@ async def _agent_qa_review(task_gid: str, task: dict, run: dict) -> Optional[str
 
         if qa_text.startswith("{") and '"type"' in qa_text[:100]:
             add_log(task_gid, "QA response contains raw stream JSON — extracting text", "warning")
+            # Log event types to help debug extraction failures
+            try:
+                event_types = {}
+                for raw_line in qa_text.split("\n"):
+                    if raw_line.strip().startswith("{"):
+                        ev = json.loads(raw_line.strip())
+                        et = ev.get("type", "?")
+                        event_types[et] = event_types.get(et, 0) + 1
+                add_log(task_gid, f"Stream event types: {event_types}", "debug")
+            except Exception:
+                pass
             extracted = extract_text_from_stream(qa_text)
             if not extracted:
                 add_log(task_gid, "Could not extract QA text from stream", "warning")

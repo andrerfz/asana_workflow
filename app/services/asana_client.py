@@ -39,9 +39,8 @@ async def _paginated_get(url: str, params: dict, headers: dict, retries: int = 2
             body = resp.json()
             results.extend(body.get("data", []))
             next_page = body.get("next_page")
-            if next_page:
-                url = next_page["uri"]
-                params = {}  # params baked into next_page URI
+            if next_page and next_page.get("offset"):
+                params["offset"] = next_page["offset"]
             else:
                 break
     return results

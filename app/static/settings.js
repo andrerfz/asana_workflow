@@ -18,6 +18,7 @@ function switchSettingsTab(tab, btn) {
   else if (tab === 'ide') renderIDETab();
   else if (tab === 'mapping') renderMappingTab();
   else if (tab === 'agent') renderAgentTab();
+  else if (tab === 'guides') renderGuidesTab();
   else if (tab === 'workflow') renderWorkflowTab();
 }
 
@@ -457,6 +458,58 @@ async function renderAgentTab() {
     body.innerHTML = html;
   } catch (e) {
     body.innerHTML = `<p style="color:var(--red)">Error: ${e.message}</p>`;
+  }
+}
+
+// ════════ CLAUDE.md GUIDES ════════
+
+async function renderGuidesTab() {
+  const body = document.getElementById('settingsBody');
+  body.innerHTML = '<div class="spinner"></div>';
+  try {
+    const resp = await fetch('/api/guides');
+    const guides = await resp.json();
+    let html = '<div class="settings-section"><h3>CLAUDE.md Guides</h3>'
+      + '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">'
+      + 'These guides are loaded during the Investigation phase to help the agent understand your projects. '
+      + 'The Global guide describes cross-project relationships. Per-repo guides are read from each repository\'s CLAUDE.md file.</p>';
+
+    for (const g of guides) {
+      const badge = g.type === 'global'
+        ? '<span style="background:#0ea5e9;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;margin-left:6px">GLOBAL</span>'
+        : '<span style="background:var(--surface2);color:var(--text2);padding:2px 6px;border-radius:4px;font-size:10px;margin-left:6px">' + esc(g.id) + '</span>';
+      const exists = g.content !== null;
+      html += '<div class="form-group" style="margin-bottom:16px">'
+        + '<label style="font-weight:600;font-size:13px">' + esc(g.label) + badge + '</label>'
+        + '<textarea class="form-input" id="guide-' + esc(g.id) + '" rows="12"'
+        + ' style="font-family:monospace;font-size:12px;white-space:pre;resize:vertical"'
+        + ' placeholder="' + (exists ? '' : 'No CLAUDE.md file found. Create one by typing content here and saving.') + '"'
+        + '>' + (exists ? esc(g.content) : '') + '</textarea>'
+        + '<div class="form-actions" style="margin-top:6px">'
+        + '<button class="btn btn-sm" onclick="saveGuide(\'' + esc(g.id) + '\')">Save</button>'
+        + '</div></div>';
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.textContent = 'Error loading guides: ' + e.message;
+  }
+}
+
+async function saveGuide(guideId) {
+  const textarea = document.getElementById('guide-' + guideId);
+  if (!textarea) return;
+  try {
+    const resp = await fetch('/api/guides/' + guideId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: textarea.value }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    showToast('Guide saved');
+  } catch (e) {
+    showToast('Error saving guide: ' + e.message, 'error');
   }
 }
 

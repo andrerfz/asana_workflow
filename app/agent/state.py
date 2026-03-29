@@ -11,6 +11,7 @@ from ..config import DATA_DIR
 from .phases import AgentPhase
 from .queue import agent_queue
 from ..services.repo_manager import get_repo
+from ..services.worktree_manager import WORKTREE_BASE, get_worktree_status
 
 log = logging.getLogger(__name__)
 
@@ -138,12 +139,43 @@ def clear_agent_run(task_gid: str) -> bool:
     return False
 
 
+def _enrich_repos_from_disk(run: dict):
+    """Discover worktrees on disk that aren't tracked in the run's repos array.
+
+    This handles cases where a worktree was created during coding (e.g., Claude
+    Code ran `git worktree add`) but the agent state wasn't updated to include it.
+    """
+    task_gid = run.get("task_gid")
+    if not task_gid:
+        return
+    task_dir = WORKTREE_BASE / task_gid
+    if not task_dir.exists():
+        return
+
+    tracked_ids = {r["id"] for r in run.get("repos", [])}
+
+    for repo_dir in task_dir.iterdir():
+        if not repo_dir.is_dir() or repo_dir.name in tracked_ids:
+            continue
+        # Found an untracked worktree on disk — add it to repos
+        status = get_worktree_status(task_gid, repo_dir.name)
+        if status:
+            run.setdefault("repos", []).append({
+                "id": repo_dir.name,
+                "status": "done" if status.get("commit_count", 0) > 0 else "ready",
+                "commits": status.get("commit_count", 0),
+                "worktree_path": status["path"],
+                "branch": status.get("branch"),
+            })
+
+
 def get_agent_status(task_gid: str) -> Optional[dict]:
     """Get current agent run status."""
     run = load_agent_run(task_gid)
     if not run:
         return None
     run["is_active"] = task_gid in _active_workers and not _active_workers[task_gid].done()
+    _enrich_repos_from_disk(run)
     return run
 
 
@@ -157,6 +189,7 @@ def list_active_agents() -> list[dict]:
             run = json.loads(f.read_text())
             gid = run.get("task_gid", f.stem)
             run["is_active"] = gid in _active_workers and not _active_workers[gid].done()
+            _enrich_repos_from_disk(run)
             results.append(run)
         except (json.JSONDecodeError, OSError):
             continue
