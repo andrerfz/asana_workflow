@@ -1150,14 +1150,21 @@ async def _agent_investigate(task_gid: str, context: str, run: dict) -> Optional
         wt_path = run["repos"][0].get("worktree_path", ".")
 
         # Build list of all repo paths for cross-project exploration
+        # Show actual worktree paths for task repos so the agent knows where to look
         all_repos = list_repos()
+        task_repo_map = {r["id"]: r for r in run.get("repos", [])}
         repo_map = []
-        task_repo_ids = {r["id"] for r in run.get("repos", [])}
         for repo_entry in all_repos:
-            label = "YOUR WORKTREE" if repo_entry["id"] in task_repo_ids else "related project"
-            path = repo_entry.get("path", "")
+            rid = repo_entry["id"]
             lang = repo_entry.get("language", "unknown")
-            repo_map.append(f"- {repo_entry['id']} ({label}, {lang}): {path}")
+            if rid in task_repo_map:
+                tr = task_repo_map[rid]
+                wt = tr.get("worktree_path") or repo_entry.get("path", "")
+                branch = tr.get("branch", "N/A")
+                repo_map.append(f"- {rid} (YOUR WORKTREE, {lang}): {wt}  [branch: {branch}]")
+            else:
+                path = repo_entry.get("path", "")
+                repo_map.append(f"- {rid} (related project, {lang}): {path}")
         repos_section = "\n".join(repo_map) if repo_map else "No repos configured."
 
         # Load CLAUDE.md guides
@@ -1200,6 +1207,7 @@ async def _agent_investigate(task_gid: str, context: str, run: dict) -> Optional
             allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)"],
             system_prompt=system,
             task_gid=task_gid,
+            model="opus",
         )
 
         report = result.get("text", "").strip()

@@ -97,7 +97,8 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                           system_prompt: str = None,
                           output_format: str = "text",
                           task_gid: str = None,
-                          resume_session_id: str = None) -> dict:
+                          resume_session_id: str = None,
+                          model: str = None) -> dict:
     """Run Claude Code CLI as subprocess and stream output to logs in real time."""
     cli = _find_claude_cli()
     if not cli:
@@ -133,6 +134,9 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
 
     if system_prompt:
         cmd.extend(["--system-prompt", system_prompt])
+
+    if model:
+        cmd.extend(["--model", model])
 
     # --dangerously-skip-permissions avoids interactive prompts in headless mode
     cmd.append("--dangerously-skip-permissions")
