@@ -21,6 +21,28 @@
   </div>
 </div>
 
+<!-- Live Console Panel -->
+<div class="console-overlay" id="consoleOverlay" style="display:none" onclick="if(event.target===this)closeConsole()">
+  <div class="console-panel" id="consolePanel">
+    <div class="console-resize-handle" id="consoleResizeHandle"></div>
+    <div class="console-header">
+      <div>
+        <div class="console-title" id="consoleTitle">Agent Console</div>
+        <div class="console-subtitle" id="consoleSubtitle"></div>
+      </div>
+      <button class="console-new-chat" onclick="consoleClearChat()" title="New chat">&#43; New chat</button>
+      <button class="console-close" onclick="closeConsole()">&times;</button>
+    </div>
+    <div class="console-messages" id="consoleMessages"></div>
+    <div class="console-input-row">
+      <textarea id="consoleInput" placeholder="Enter to send · Option+Enter for new line" rows="2"
+        onkeydown="if(event.key==='Enter'&&!event.altKey&&!event.shiftKey){event.preventDefault();consoleSend()}"></textarea>
+      <button class="console-send" id="consoleSendBtn" onclick="consoleSend()">Send</button>
+      <button class="console-send" id="consoleStopBtn" onclick="consoleStop()" style="display:none;background:#ef4444">Stop</button>
+    </div>
+  </div>
+</div>
+
 <!-- Settings Modal -->
 <div class="modal-overlay" id="settingsModal" style="display:none" onclick="if(event.target===this)closeSettings()">
   <div class="modal">

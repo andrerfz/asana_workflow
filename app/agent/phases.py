@@ -12,6 +12,7 @@ class AgentPhase(str, Enum):
     CODING = "coding"
     TESTING = "testing"
     QA_REVIEW = "qa_review"
+    FINALIZING = "finalizing"
     DONE = "done"
     ERROR = "error"
     PAUSED = "paused"       # Waiting for human input
@@ -23,6 +24,7 @@ class AgentPhase(str, Enum):
             "queued": "#6b7280", "init": "#8b5cf6", "investigating": "#0ea5e9",
             "planning": "#d97706",
             "awaiting_approval": "#eab308", "coding": "#3b82f6", "testing": "#22c55e",
+            "finalizing": "#14b8a6",
             "done": "#8b5cf6", "error": "#ef4444", "paused": "#eab308",
             "cancelled": "#4b5563",
         }.get(self.value, "#6b7280")
@@ -105,12 +107,20 @@ WORKFLOW_GRAPH: dict = {
             "row": 1, "col": 3,
         },
         {
+            "id": "finalizing",
+            "label": "Finalizing",
+            "icon": "🧹",
+            "color": "#14b8a6",
+            "desc": "Auto-cleanup after QA approval.\nSquash commits to conventional format.\nRun lint auto-fix if configured.\nRemove TODOs/FIXMEs introduced by agent.",
+            "row": 1, "col": 4,
+        },
+        {
             "id": "done",
             "label": "Done",
             "icon": "✅",
             "color": "#10b981",
             "desc": "Push branch to remote.\nMove Asana task → configured 'On Done' section.\nPost summary comment with branches & commit count.",
-            "row": 1, "col": 4,
+            "row": 1, "col": 5,
         },
         {
             "id": "error",
@@ -140,8 +150,9 @@ WORKFLOW_GRAPH: dict = {
         {"from": "rebase", "to": "testing", "type": "main"},
         {"from": "testing", "to": "qa_review", "type": "main", "label": "Pass"},
         {"from": "testing", "to": "coding", "type": "loop", "label": "Fix & retry"},
-        {"from": "qa_review", "to": "done", "type": "main", "label": "Approve"},
+        {"from": "qa_review", "to": "finalizing", "type": "main", "label": "Approve"},
         {"from": "qa_review", "to": "coding", "type": "loop", "label": "Reject"},
+        {"from": "finalizing", "to": "done", "type": "main"},
         # Error edges — any active phase can error
         {"from": "init", "to": "error", "type": "error"},
         {"from": "investigating", "to": "error", "type": "error"},
@@ -150,6 +161,7 @@ WORKFLOW_GRAPH: dict = {
         {"from": "rebase", "to": "error", "type": "error"},
         {"from": "testing", "to": "error", "type": "error"},
         {"from": "qa_review", "to": "error", "type": "error"},
+        {"from": "finalizing", "to": "error", "type": "error"},
         # Pause edges
         {"from": "coding", "to": "paused", "type": "pause"},
         {"from": "paused", "to": "coding", "type": "pause", "label": "Answer"},

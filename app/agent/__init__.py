@@ -23,14 +23,11 @@ from .state import (
 )
 from .claude_client import check_claude_code_status
 from .executor import (
-    start_agent, stop_agent, answer_question, guide_agent,
+    start_agent, stop_agent, answer_question, guide_agent, chat_agent,
     resume_agent, trigger_manual_qa, run_manual_tests,
 )
 from .queue import agent_queue
-from .memory import (
-    load_memory, clear_memory, get_all_memory_repos,
-    get_memory_context, update_memory_after_run,
-)
+from .memory import get_memory_context, update_memory_after_run
 from .stream_parser import recover_stale_runs
 from .ws_manager import ws_manager
 

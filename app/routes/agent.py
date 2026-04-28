@@ -1,12 +1,13 @@
 """Agent worker API routes."""
 import re
 import json
+import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 
 from ..agent import (
-    start_agent, stop_agent, answer_question, guide_agent,
+    start_agent, stop_agent, answer_question, guide_agent, chat_agent,
     resume_agent,
     get_agent_status, list_active_agents,
     check_claude_code_status, clear_agent_run,
@@ -14,15 +15,10 @@ from ..agent import (
     load_agent_settings, save_agent_settings,
     trigger_manual_qa, run_manual_tests,
     AGENT_RUNS_DIR,
-    agent_queue,
-    load_memory, clear_memory, get_all_memory_repos,
 )
 from ..services.asana_client import fetch_task_stories, fetch_subtasks
 from ..services.task_cache import get_cached_tasks, refresh_cache
-from ..services.repo_manager import (
-    get_task_repo_override, set_task_repo_override,
-    load_task_repo_overrides,
-)
+from ..services.repo_manager import set_task_repo_override, load_task_repo_overrides
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
@@ -52,15 +48,6 @@ class AnswerQuestion(BaseModel):
     @property
     def clean_answer(self) -> str:
         return self.answer.strip()
-
-
-class QueueConfig(BaseModel):
-    max_parallel: Optional[int] = None
-    token_budget_per_task: Optional[int] = None
-
-
-class ReorderQueue(BaseModel):
-    task_gids: list[str]
 
 
 class TaskRepoOverride(BaseModel):
@@ -227,6 +214,42 @@ async def guide_task_agent(task_gid: str, body: GuideAgent):
     return {"status": "ok", "task_gid": task_gid}
 
 
+class ChatMessage(BaseModel):
+    message: str
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Message cannot be empty")
+        return v.strip()
+
+
+@router.post("/chat/{task_gid}")
+async def chat_with_agent(task_gid: str, body: ChatMessage):
+    """Read-only chat with the agent — runs in background, response arrives via WebSocket."""
+    from ..agent.state import load_agent_run
+    run = load_agent_run(task_gid)
+    if not run:
+        raise HTTPException(404, "No agent run found")
+    if not any(r.get("worktree_path") for r in run.get("repos", [])):
+        raise HTTPException(400, "No worktree available for this task")
+    asyncio.create_task(chat_agent(task_gid, body.message))
+    return {"status": "ok"}
+
+
+@router.delete("/chat/{task_gid}")
+async def clear_chat(task_gid: str):
+    """Clear the conversation history for a task."""
+    from ..agent.state import load_agent_run, save_agent_run
+    run = load_agent_run(task_gid)
+    if not run:
+        raise HTTPException(404, "No agent run found")
+    run["conversation"] = []
+    save_agent_run(task_gid, run)
+    return {"status": "ok"}
+
+
 @router.post("/test/{task_gid}")
 async def run_tests(task_gid: str):
     """Manually run tests on a task's worktree(s)."""
@@ -321,77 +344,6 @@ async def get_diff(task_gid: str, repo_id: str):
     return get_worktree_diff(task_gid, repo_id)
 
 
-@router.get("/diff/{task_gid}/{repo_id}/file")
-async def get_file_diff(task_gid: str, repo_id: str, path: str = ""):
-    """Get full diff for a specific file."""
-    import subprocess
-    from repo_manager import get_repo
-
-    run = load_agent_run(task_gid)
-    if not run:
-        raise HTTPException(404, "No agent run")
-    repo_entry = next((r for r in run.get("repos", []) if r["id"] == repo_id), None)
-    if not repo_entry or not repo_entry.get("worktree_path"):
-        raise HTTPException(404, "No worktree")
-
-    wt_path = repo_entry["worktree_path"]
-    repo = get_repo(repo_id)
-    default_branch = repo.get("default_branch", "master") if repo else "master"
-
-    cmd = ["git", "diff", f"origin/{default_branch}...HEAD"]
-    if path:
-        cmd.extend(["--", path])
-
-    try:
-        result = subprocess.run(cmd, cwd=wt_path, capture_output=True, text=True, timeout=10)
-        return {"diff": result.stdout[:50000]}  # Limit to 50KB
-    except Exception as e:
-        raise HTTPException(500, f"Diff error: {str(e)}")
-
-
-# ─── Queue Management Endpoints ───
-
-
-@router.get("/queue")
-async def get_queue_status():
-    """Get queue status: running, queued, and config."""
-    return {
-        "queue": agent_queue.queue_list,
-        "running_count": agent_queue.running_count,
-        "slots_available": agent_queue.slots_available,
-        "config": agent_queue.config,
-    }
-
-
-@router.put("/queue/config")
-async def update_queue_config(body: QueueConfig):
-    """Update queue configuration (max_parallel, token_budget_per_task)."""
-    config_update = {}
-    if body.max_parallel is not None:
-        config_update["max_parallel"] = max(1, body.max_parallel)
-    if body.token_budget_per_task is not None:
-        config_update["token_budget_per_task"] = max(1000, body.token_budget_per_task)
-
-    if config_update:
-        agent_queue.save_config(config_update)
-
-    return {"status": "ok", "config": agent_queue.config}
-
-
-@router.delete("/queue/{task_gid}")
-async def remove_from_queue(task_gid: str):
-    """Remove a task from the queue (does nothing if not queued or already running)."""
-    agent_queue.dequeue(task_gid)
-    return {"status": "ok", "task_gid": task_gid}
-
-
-@router.put("/queue/reorder")
-async def reorder_queue(body: ReorderQueue):
-    """Reorder the task queue to match the given GID order."""
-    agent_queue.reorder(body.task_gids)
-    return {"status": "ok", "queue": agent_queue.queue_list}
-
-
 # ─── Task Repo Override Endpoints ───
 
 
@@ -401,45 +353,11 @@ async def get_all_task_repo_overrides():
     return load_task_repo_overrides()
 
 
-@router.get("/task/{task_gid}/repos")
-async def get_task_repo_override_endpoint(task_gid: str):
-    """Get the current repo override for a task."""
-    override = get_task_repo_override(task_gid)
-    return {"task_gid": task_gid, "repo_ids": override}
-
-
 @router.put("/task/{task_gid}/repos")
 async def set_task_repo_override_endpoint(task_gid: str, body: TaskRepoOverride):
     """Set the repo override for a task."""
     set_task_repo_override(task_gid, body.repo_ids)
     return {"task_gid": task_gid, "repo_ids": body.repo_ids, "status": "ok"}
-
-
-# ─── Agent Memory Endpoints ───
-
-
-@router.get("/memory")
-async def list_memory():
-    """List all repos with stored agent memory."""
-    repos = get_all_memory_repos()
-    return {"repos": repos, "count": len(repos)}
-
-
-@router.get("/memory/{repo_id}")
-async def get_memory(repo_id: str):
-    """Get agent memory for a specific repo."""
-    memory = load_memory(repo_id)
-    if not memory["entries"] and not memory["patterns"]:
-        raise HTTPException(404, f"No memory found for repo {repo_id}")
-    return memory
-
-
-@router.delete("/memory/{repo_id}")
-async def clear_repo_memory(repo_id: str):
-    """Clear agent memory for a specific repo."""
-    if not clear_memory(repo_id):
-        raise HTTPException(500, f"Failed to clear memory for repo {repo_id}")
-    return {"status": "ok", "repo_id": repo_id}
 
 
 # ─── Agent Settings Endpoints ───

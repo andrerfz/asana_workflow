@@ -82,7 +82,7 @@ async def sync_to_asana():
             errors.append({"gid": gid, "name": task["name"], "error": str(e)})
 
     # Auto-snapshot on sync
-    from routes.history import _take_snapshot
+    from .history import _take_snapshot
     await _take_snapshot(raw_tasks, overrides)
 
     # Refresh cache after sync

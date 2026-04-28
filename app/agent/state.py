@@ -26,6 +26,7 @@ TOKEN_PRICING = {
 
 # Safety blocklist for dangerous commands
 BASH_BLOCKLIST = "NEVER run these commands: rm -rf, git push, git push --force, docker rm, docker rmi, DROP TABLE, DROP DATABASE, shutdown, reboot, mkfs, dd if="
+CODING_TEST_BLOCK = "NEVER run the test suite yourself (no make test, make agent-test*, phpunit, php artisan test, pytest, npm test, or any full test runner). Tests are executed automatically by the executor after you commit — running them yourself will hang the process."
 
 
 # ─── Active Workers ───
@@ -96,6 +97,27 @@ def add_log(task_gid: str, message: str, level: str = "info"):
         loop.create_task(_emit_event("agent:log", {"task_gid": task_gid, "log": entry}))
     except RuntimeError:
         pass  # no event loop running (e.g. called from sync context at startup)
+
+
+def add_conversation_message(task_gid: str, role: str, text: str):
+    """Add a user or agent message to the conversation history and broadcast it."""
+    run = load_agent_run(task_gid)
+    if not run:
+        return
+    entry = {
+        "role": role,  # "user" or "agent"
+        "text": text,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    if "conversation" not in run:
+        run["conversation"] = []
+    run["conversation"].append(entry)
+    save_agent_run(task_gid, run)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_emit_event("agent:conversation", {"task_gid": task_gid, "message": entry}))
+    except RuntimeError:
+        pass
 
 
 def update_phase(task_gid: str, phase: AgentPhase, **kwargs):
@@ -239,6 +261,7 @@ def create_agent_run(task_gid: str, task_name: str, repos: list[dict]) -> dict:
         "phase": AgentPhase.QUEUED.value,
         "repos": [{"id": r["id"], "status": "pending", "commits": 0, "worktree_path": None} for r in repos],
         "logs": [],
+        "conversation": [],
         "plan": None,
         "question": None,
         "tokens": {"input": 0, "output": 0},

@@ -40,7 +40,7 @@ async function checkAiStatus() {
 
 async function fetchRepoList() {
   try {
-    const resp = await fetch('/api/repos/list');
+    const resp = await fetch('/api/repos');
     if (!resp.ok) throw new Error(await resp.text());
     const data = await resp.json();
     repoList = data.repos || [];

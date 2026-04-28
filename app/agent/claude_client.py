@@ -98,7 +98,9 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                           output_format: str = "text",
                           task_gid: str = None,
                           resume_session_id: str = None,
-                          model: str = None) -> dict:
+                          model: str = None,
+                          subprocess_timeout: float = None,
+                          on_text_chunk=None) -> dict:
     """Run Claude Code CLI as subprocess and stream output to logs in real time."""
     cli = _find_claude_cli()
     if not cli:
@@ -183,6 +185,14 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
             try:
                 event = json.loads(decoded)
                 _handle_stream_event(event, task_gid)
+                # Stream text chunks to caller if requested
+                if on_text_chunk and event.get("type") == "assistant":
+                    content = event.get("message", {}).get("content", [])
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            chunk = block.get("text", "")
+                            if chunk:
+                                asyncio.get_event_loop().create_task(on_text_chunk(chunk))
                 # Capture the final result message and session_id
                 if event.get("type") == "result":
                     result_text = event.get("result", "")
@@ -217,9 +227,22 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                 elapsed = 0  # reset after activity
 
     heartbeat_task = asyncio.create_task(_heartbeat())
+    timed_out = False
     try:
-        await asyncio.gather(_stream_stdout(), _stream_stderr())
-        await process.wait()
+        streams = asyncio.gather(_stream_stdout(), _stream_stderr())
+        if subprocess_timeout:
+            try:
+                await asyncio.wait_for(streams, timeout=subprocess_timeout)
+            except asyncio.TimeoutError:
+                timed_out = True
+                if task_gid:
+                    add_log(task_gid, f"[claude] Subprocess timeout after {int(subprocess_timeout)}s — killing process", "warning")
+                process.kill()
+        else:
+            await streams
+        await asyncio.wait_for(process.wait(), timeout=5.0)
+    except asyncio.TimeoutError:
+        process.kill()
     finally:
         heartbeat_task.cancel()
         try:
@@ -233,24 +256,38 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
     error_text = "".join(stderr_chunks)
     raw_output = "\n".join(stdout_lines)
 
+    # Detect rate limit errors from stderr or stdout
+    combined = error_text + raw_output
+    if "rate limit" in combined.lower() or "Rate limit" in combined:
+        raise RuntimeError("API Error: Rate limit reached — wait a moment and retry")
+
     # If no "result" event was captured, extract from stream-json events
     if not result_text:
         if task_gid:
             event_types = {}
+            sample_assistant = None
             for line in stdout_lines:
                 try:
                     ev = json.loads(line)
-                    event_types[ev.get("type", "unknown")] = event_types.get(ev.get("type", "unknown"), 0) + 1
+                    et = ev.get("type", "unknown")
+                    event_types[et] = event_types.get(et, 0) + 1
+                    # Capture first assistant event structure for debugging
+                    if et == "assistant" and not sample_assistant:
+                        sample_assistant = str(ev)[:500]
                 except (json.JSONDecodeError, KeyError):
                     pass
             log.info("Stream event types for %s: %s", task_gid, event_types)
+            if sample_assistant:
+                log.info("Sample assistant event for %s: %s", task_gid, sample_assistant)
+            add_log(task_gid, f"[claude] Stream fallback: events={event_types}", "debug")
         result_text = extract_result_from_stream_lines(stdout_lines)
 
     result = {
         "returncode": process.returncode,
         "raw_output": raw_output,
         "stderr": error_text,
-        "text": result_text or raw_output,
+        "text": result_text or "",
+        "timed_out": timed_out,
     }
     if final_result:
         result["parsed"] = final_result

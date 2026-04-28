@@ -23,6 +23,7 @@ function taskCard(t) {
     coding:            { stop: true },
     testing:           { stop: true },
     qa_review:         { stop: true },
+    finalizing:        { stop: true },
     paused:            { stop: true },
     done:              { dismiss: true, test: 'wt', qa: true, classify: true },
     error:             { dismiss: true, retry: true, test: 'wt', qa: true, classify: true },
@@ -197,15 +198,29 @@ function agentPanelHTML(gid, agent) {
     </div>`;
   }
 
-  // Guide input — available during any working phase (coding, testing, investigating, planning, qa_review)
-  const guidePhases = ['coding', 'testing', 'investigating', 'planning', 'qa_review', 'init'];
+  // Guide input + console button — available during any working phase
+  const guidePhases = ['coding', 'testing', 'investigating', 'planning', 'init'];
+  const hasConversation = agent.conversation && agent.conversation.length > 0;
   if (guidePhases.includes(agent.phase)) {
     html += `<div class="agent-guide" style="margin-bottom:8px;padding:10px 12px;background:rgba(59,130,246,0.07);border-left:3px solid #3b82f6;border-radius:4px">
-      <div style="font-size:11px;font-weight:600;color:#3b82f6;margin-bottom:6px">Guide Agent</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:600;color:#3b82f6">Guide Agent</div>
+        <button onclick="openConsole('${gid}')" style="font-size:10px;padding:2px 8px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);border-radius:4px;color:#3b82f6;cursor:pointer">
+          💬 Console${hasConversation ? ` (${agent.conversation.length})` : ''}
+        </button>
+      </div>
       <div style="display:flex;gap:6px;align-items:flex-end">
         <textarea class="form-input" id="agent-guide-${gid}" placeholder="Send feedback or redirect the agent..." rows="2" style="flex:1;font-size:12px;resize:vertical;min-height:44px" ${busy?'disabled':''}></textarea>
         <button class="btn btn-primary" onclick="guideAgent('${gid}',this)" ${dis} style="align-self:flex-end;font-size:11px;padding:4px 12px">Send</button>
       </div>
+    </div>`;
+  } else {
+    // Show chat console button in any other phase (qa_review, error, done, etc.)
+    const chatLabel = hasConversation ? `💬 Chat (${agent.conversation.length})` : '💬 Ask Agent';
+    html += `<div style="margin-bottom:8px">
+      <button onclick="openConsole('${gid}')" style="font-size:11px;padding:4px 10px;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);border-radius:6px;color:#3b82f6;cursor:pointer">
+        ${chatLabel}
+      </button>
     </div>`;
   }
 

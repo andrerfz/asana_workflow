@@ -144,7 +144,7 @@ def recover_stale_runs(runs_dir, active_phases: set = None) -> list[dict]:
     Returns list of recovered run summaries: [{"task_gid": ..., "old_phase": ..., "new_phase": "error"}]
     """
     if active_phases is None:
-        active_phases = {"coding", "testing", "qa_review", "planning", "init", "queued"}
+        active_phases = {"coding", "testing", "qa_review", "finalizing", "planning", "init", "queued"}
 
     recovered = []
     if not runs_dir.exists():

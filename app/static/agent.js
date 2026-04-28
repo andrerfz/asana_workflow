@@ -67,6 +67,18 @@ function handleAgentEvent(event, data) {
     return;
   }
 
+  if (event === 'agent:conversation' && data.message) {
+    const msg = data.message;
+    if (agentStatuses[gid]) {
+      if (!agentStatuses[gid].conversation) agentStatuses[gid].conversation = [];
+      agentStatuses[gid].conversation.push(msg);
+    }
+    // Append to open console if it's for the current task
+    if (_consoleGid === gid) _consoleAppendMessage(msg);
+    updateAgentUI(gid);
+    return;
+  }
+
   if (event === 'agent:log' && data.log) {
     const l = data.log;
     if (agentStatuses[gid]?.logs) {
@@ -83,6 +95,20 @@ function handleAgentEvent(event, data) {
       if (btn && btn.classList.contains('btn-agent-logs')) {
         btn.textContent = `Logs (${agentStatuses[gid]?.logs?.length || '?'})`;
       }
+    }
+    // Mirror log activity into the thinking bubble while a chat is in-flight
+    if (gid === _consoleGid && l.message) {
+      const bubble = document.querySelector('#consoleThinking .console-thinking-bubble');
+      if (bubble) bubble.textContent = l.message.replace(/^\[claude\]\s*/, '');
+    }
+    return;
+  }
+
+  if (event === 'agent:chat_token' && gid === _consoleGid) {
+    if (data.done) {
+      _consoleStreamDone();
+    } else if (data.chunk) {
+      _consoleStreamChunk(data.chunk);
     }
     return;
   }
@@ -476,4 +502,217 @@ async function loadDiff(gid, repoId) {
     html += `</div>`;
     container.innerHTML = html;
   } catch {}
+}
+
+// ════════ LIVE CONSOLE ════════
+
+let _consoleGid = null;
+
+// Resize from top-left handle — panel is anchored bottom-right
+(function initConsoleResize() {
+  let dragging = false, startX, startY, startW, startH;
+
+  document.addEventListener('mousedown', e => {
+    if (!e.target.closest('#consoleResizeHandle')) return;
+    e.preventDefault();
+    const panel = document.getElementById('consolePanel');
+    dragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startW = panel.offsetWidth;
+    startH = panel.offsetHeight;
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const panel = document.getElementById('consolePanel');
+    const newW = Math.max(320, startW - (e.clientX - startX));
+    const newH = Math.max(280, startH - (e.clientY - startY));
+    panel.style.width = newW + 'px';
+    panel.style.height = newH + 'px';
+  });
+
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+function openConsole(gid) {
+  _consoleGid = gid;
+  const agent = agentStatuses[gid];
+  const overlay = document.getElementById('consoleOverlay');
+  document.getElementById('consoleTitle').textContent = agent?.task_name || 'Agent Console';
+  document.getElementById('consoleSubtitle').textContent = agent ? `Phase: ${agent.phase}` : '';
+  _consoleRender(agent?.conversation || []);
+  // Clear input so text from a previous task doesn't carry over
+  const input = document.getElementById('consoleInput');
+  input.value = '';
+  input.disabled = false;
+  document.getElementById('consoleSendBtn').disabled = false;
+  document.getElementById('consoleSendBtn').textContent = 'Send';
+  _consoleSetThinking(false);
+  _streamBubbleEl = null;
+  _streamText = '';
+  document.getElementById('consoleSendBtn').style.display = '';
+  const stopBtn = document.getElementById('consoleStopBtn');
+  if (stopBtn) stopBtn.style.display = 'none';
+  overlay.style.display = 'flex';
+  input.focus();
+}
+
+function closeConsole() {
+  document.getElementById('consoleOverlay').style.display = 'none';
+  _consoleGid = null;
+}
+
+async function consoleClearChat() {
+  if (!_consoleGid) return;
+  await fetch(`/api/agent/chat/${_consoleGid}`, { method: 'DELETE' }).catch(() => {});
+  if (agentStatuses[_consoleGid]) agentStatuses[_consoleGid].conversation = [];
+  _consoleRender([]);
+  _streamBubbleEl = null;
+  _streamText = '';
+}
+
+function _consoleRender(messages) {
+  const el = document.getElementById('consoleMessages');
+  if (!messages.length) {
+    el.innerHTML = '<div class="console-empty"><span style="font-size:24px">💬</span><span>No messages yet. Send guidance to start a conversation.</span></div>';
+    return;
+  }
+  el.innerHTML = messages.map(m => _consoleMsgHtml(m)).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function _consoleMsgHtml(m) {
+  const time = (m.timestamp || '').split('T')[1]?.slice(0, 5) || '';
+  return `<div class="console-msg ${m.role}"><div class="console-bubble">${esc(m.text)}</div><div class="console-msg-time">${esc(time)}</div></div>`;
+}
+
+function _consoleAppendMessage(m) {
+  const el = document.getElementById('consoleMessages');
+  if (!el) return;
+  const empty = el.querySelector('.console-empty');
+  if (empty) empty.remove();
+  // Only remove thinking indicator when agent replies, not on user messages
+  if (m.role === 'agent') {
+    _consoleSetThinking(false);
+  } else {
+    // User message arrived — start thinking indicator
+    _consoleSetThinking(true);
+  }
+  const div = document.createElement('div');
+  div.innerHTML = _consoleMsgHtml(m);
+  el.appendChild(div.firstElementChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+function _consoleSetThinking(on) {
+  // Header subtitle indicator
+  const subtitle = document.getElementById('consoleSubtitle');
+  if (subtitle) {
+    const agent = _consoleGid ? agentStatuses[_consoleGid] : null;
+    const phase = agent?.phase || '';
+    subtitle.textContent = on ? '⏳ Thinking...' : (phase ? `Phase: ${phase}` : '');
+    subtitle.style.color = on ? 'var(--accent)' : '';
+  }
+  // Bubble indicator
+  const el = document.getElementById('consoleMessages');
+  if (!el) return;
+  const existing = el.querySelector('#consoleThinking');
+  if (on && !existing) {
+    const div = document.createElement('div');
+    div.id = 'consoleThinking';
+    div.className = 'console-msg agent';
+    div.innerHTML = '<div class="console-bubble console-thinking-bubble">thinking<span class="console-dots"><span>.</span><span>.</span><span>.</span></span></div>';
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  } else if (!on && existing) {
+    existing.remove();
+  }
+}
+
+// Streaming bubble — created when first token arrives, updated as chunks come in
+let _streamBubbleEl = null;
+let _streamText = '';
+
+function _consoleStreamChunk(chunk) {
+  const el = document.getElementById('consoleMessages');
+  if (!el) return;
+  _consoleSetThinking(false);
+  _streamText += chunk;
+  if (!_streamBubbleEl) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'console-msg agent';
+    wrapper.id = 'consoleStreamBubble';
+    const bubble = document.createElement('div');
+    bubble.className = 'console-bubble';
+    wrapper.appendChild(bubble);
+    el.appendChild(wrapper);
+    _streamBubbleEl = bubble;
+  }
+  _streamBubbleEl.textContent = _streamText;
+  el.scrollTop = el.scrollHeight;
+}
+
+function _consoleStreamDone() {
+  _streamBubbleEl = null;
+  _streamText = '';
+  // Re-enable input
+  const input = document.getElementById('consoleInput');
+  const stopBtn = document.getElementById('consoleStopBtn');
+  if (input) { input.disabled = false; input.focus(); }
+  if (stopBtn) stopBtn.style.display = 'none';
+  document.getElementById('consoleSendBtn').style.display = '';
+}
+
+async function consoleSend() {
+  const gid = _consoleGid;
+  if (!gid) return;
+  const input = document.getElementById('consoleInput');
+  const btn = document.getElementById('consoleSendBtn');
+  const stopBtn = document.getElementById('consoleStopBtn');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const agent = agentStatuses[gid];
+  const activePhases = ['coding', 'testing', 'investigating', 'planning', 'init'];
+  const isActive = agent && activePhases.includes(agent.phase);
+  const url = isActive ? `/api/agent/guide/${gid}` : `/api/agent/chat/${gid}`;
+  const payload = isActive ? { feedback: text } : { message: text };
+
+  input.value = '';
+  input.disabled = true;
+  btn.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = '';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.detail || 'Failed to send', 'error');
+      _consoleSetThinking(false);
+      input.disabled = false;
+      btn.style.display = '';
+      if (stopBtn) stopBtn.style.display = 'none';
+    }
+    // Success: streaming response arrives via agent:chat_token WS events
+  } catch (e) {
+    showToast('Network error', 'error');
+    _consoleSetThinking(false);
+    input.disabled = false;
+    btn.style.display = '';
+    if (stopBtn) stopBtn.style.display = 'none';
+  }
+}
+
+function consoleStop() {
+  // Kill the chat process for this task
+  const gid = _consoleGid;
+  if (!gid) return;
+  fetch(`/api/agent/stop/${gid}`, { method: 'POST' }).catch(() => {});
+  _consoleStreamDone();
+  _consoleSetThinking(false);
 }
