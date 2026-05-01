@@ -9,7 +9,7 @@ from .claude_client import _run_claude_cli
 from ..services.repo_manager import get_repo
 from ..services.asana_client import (
     add_task_comment, delete_story, move_task_to_section, find_section_by_name,
-    fetch_task_stories, fetch_subtasks, complete_subtask,
+    fetch_task_stories, fetch_subtasks, complete_subtask, create_subtask, update_task_name,
 )
 
 log = logging.getLogger(__name__)
@@ -145,6 +145,35 @@ async def _auto_complete_subtasks(task_gid: str, run: dict):
     except Exception as e:
         log.warning("Failed to auto-complete subtasks for %s: %s", task_gid, e)
         add_log(task_gid, f"Subtask auto-complete failed: {e}", "warning")
+
+
+async def _upsert_merge_subtask(task_gid: str, run: dict):
+    """After push, create or update a 'Merge: branch' subtask for each repo."""
+    try:
+        subtasks = await fetch_subtasks(task_gid)
+        for repo_entry in run.get("repos", []):
+            branch = repo_entry.get("branch")
+            if not branch:
+                continue
+            merge_name = f"Merge: {branch}"
+            existing = next(
+                (s for s in subtasks if s.get("name", "").startswith("Merge:")),
+                None
+            )
+            if existing:
+                if existing.get("name") != merge_name:
+                    await update_task_name(existing["gid"], merge_name)
+                    add_log(task_gid, f"Updated Merge subtask: {merge_name}")
+                else:
+                    add_log(task_gid, f"Merge subtask already up to date: {merge_name}")
+            else:
+                await create_subtask(task_gid, merge_name)
+                add_log(task_gid, f"Created Merge subtask: {merge_name}")
+            # Only handle the first repo's merge subtask (avoid duplicates)
+            break
+    except Exception as e:
+        log.warning("Failed to upsert merge subtask for %s: %s", task_gid, e)
+        add_log(task_gid, f"Merge subtask upsert failed: {e}", "warning")
 
 
 async def _fetch_subtasks_context(task_gid: str) -> str:

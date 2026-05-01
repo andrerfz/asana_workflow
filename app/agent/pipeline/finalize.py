@@ -7,6 +7,7 @@ Runs automatically with no human interaction:
 - Push branch to remote
 """
 import logging
+import re
 import subprocess
 
 from ..phases import AgentPhase
@@ -145,11 +146,23 @@ async def agent_finalize(task_gid: str, run: dict) -> bool:
             )
             if push.returncode == 0:
                 add_log(task_gid, f"[{repo_id}] Pushed branch {branch}")
+                # Parse MR/PR URL from push output (GitLab/GitHub remote hints)
+                combined = (push.stdout or "") + (push.stderr or "")
+                if combined.strip():
+                    log.debug("[%s] Push remote output: %s", repo_id, combined[:500])
+                mr_match = re.search(r'https?://\S+(?:merge_requests|pull/new|pulls/new)\S*', combined)
+                if mr_match:
+                    repo_entry["mr_url"] = mr_match.group(0).rstrip(".")
+                    add_log(task_gid, f"[{repo_id}] MR/PR link: {repo_entry['mr_url']}")
+                else:
+                    log.debug("[%s] No MR/PR URL found in push output", repo_id)
             else:
                 add_log(task_gid, f"[{repo_id}] Push failed: {push.stderr[:200]}", "warning")
         except Exception as e:
             add_log(task_gid, f"[{repo_id}] Push error: {e}", "warning")
 
+    # Persist mr_url fields set during push
+    save_agent_run(task_gid, run)
     add_log(task_gid, "Finalization complete")
     return True
 

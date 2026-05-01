@@ -197,6 +197,32 @@ async def complete_subtask(subtask_gid: str) -> bool:
         return True
 
 
+async def create_subtask(parent_gid: str, name: str) -> dict:
+    """Create a new subtask under a parent task."""
+    headers = _headers()
+    url = f"{ASANA_BASE}/tasks/{parent_gid}/subtasks"
+    payload = {"data": {"name": name}}
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(url, headers=headers, json=payload)
+        if resp.status_code not in (200, 201):
+            log.error("Failed to create subtask '%s' for %s: %s", name, parent_gid, resp.text[:300])
+            return {}
+        return resp.json().get("data", {})
+
+
+async def update_task_name(task_gid: str, name: str) -> bool:
+    """Update the name of a task or subtask."""
+    headers = _headers()
+    url = f"{ASANA_BASE}/tasks/{task_gid}"
+    payload = {"data": {"name": name}}
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.put(url, headers=headers, json=payload)
+        if resp.status_code != 200:
+            log.error("Failed to rename task %s: %s", task_gid, resp.text[:300])
+            return False
+        return True
+
+
 async def move_task_to_section(task_gid: str, section_gid: str) -> bool:
     """Move a task to a different section in the project."""
     headers = _headers()

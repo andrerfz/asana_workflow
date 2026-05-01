@@ -24,7 +24,7 @@ from .claude_client import check_claude_code_status, _run_claude_cli, kill_activ
 from .asana_helpers import (
     _move_task_section, _post_asana_comment, _auto_complete_subtasks,
     _fetch_subtasks_context, _get_branch_state, _fetch_task_comments,
-    _build_fix_instructions,
+    _build_fix_instructions, _upsert_merge_subtask,
 )
 from .queue import agent_queue
 from ..services.repo_manager import get_repo, get_repos_for_task
@@ -821,6 +821,7 @@ async def _coding_test_qa_loop(task_gid: str, task: dict, task_context: str,
     )
 
     await _auto_complete_subtasks(task_gid, run)
+    await _upsert_merge_subtask(task_gid, run)
 
     for repo_entry in run.get("repos", []):
         update_memory_after_run(repo_entry["id"], task_gid, run)

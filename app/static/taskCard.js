@@ -297,6 +297,7 @@ function agentPanelHTML(gid, agent) {
           ${r.branch ? `<span style="color:var(--accent2);font-size:11px;font-family:monospace" title="Branch">${esc(r.branch)}</span>` : ''}
           <span style="color:${statusColor};font-size:11px">${displayStatus}</span>
           ${r.commits ? `<span style="color:var(--text2);font-size:11px">${r.commits} commits</span>` : ''}
+          ${r.mr_url ? `<a href="${esc(r.mr_url)}" target="_blank" rel="noopener noreferrer" style="font-size:10px;padding:2px 8px;background:#6366f1;color:#fff;border-radius:4px;text-decoration:none;font-weight:600;white-space:nowrap" title="Open MR/PR">MR ↗</a>` : ''}
           ${r.worktree_path ? `<button class="btn-icon" onclick="openInIDE('${r.worktree_path}')" title="Open in IDE">&#128194;</button>` : ''}
         </div>`;
       });
