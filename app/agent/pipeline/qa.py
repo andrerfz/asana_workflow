@@ -28,7 +28,31 @@ async def quality_checks(task_gid: str, run: dict) -> list[dict]:
         wt_path = repo_entry["worktree_path"]
         repo_id = repo_entry["id"]
 
-        # 1. Conventional commit check
+        # 1. Auto-commit detection (BLOCKING) — agent must reword these before QA passes
+        try:
+            log_result = subprocess.run(
+                ["git", "log", "--format=%s", f"origin/{repo_entry.get('default_branch', 'master')}...HEAD"],
+                cwd=wt_path, capture_output=True, text=True, timeout=10,
+            )
+            if log_result.returncode == 0:
+                auto_commits = [
+                    m for m in log_result.stdout.strip().split("\n")
+                    if m.strip() and "auto-commit uncommitted agent changes" in m.lower()
+                ]
+                checks.append({
+                    "repo": repo_id,
+                    "check": "No auto-commits",
+                    "passed": len(auto_commits) == 0,
+                    "blocking": True,
+                    "detail": (
+                        f"{len(auto_commits)} auto-commit(s) found — agent must reword with `git commit --amend -m` "
+                        f"using a proper conventional commit message (feat:, fix:, refactor:, etc.)"
+                    ) if auto_commits else "Clean",
+                })
+        except Exception:
+            pass
+
+        # 2. Conventional commit check (informational)
         try:
             result = subprocess.run(
                 ["git", "log", "--oneline", "-10"],
@@ -143,17 +167,28 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
 
         comments_context = await _fetch_task_comments(task_gid)
 
-        # Build quality checks section (informational, not blocking)
+        # Split quality checks into blocking (always cause FAIL) and informational
         quality_section = ""
         if quality_results:
-            quality_lines = []
+            blocking_lines = []
+            info_lines = []
             for c in quality_results:
                 icon = "✓" if c["passed"] else "✗"
-                quality_lines.append(f"  {icon} [{c['repo']}] {c['check']} — {c['detail']}")
-            quality_section = (
-                f"\n## Automated Quality Checks (informational)\n"
-                + "\n".join(quality_lines) + "\n"
-            )
+                line = f"  {icon} [{c['repo']}] {c['check']} — {c['detail']}"
+                if c.get("blocking"):
+                    blocking_lines.append(line)
+                else:
+                    info_lines.append(line)
+            if blocking_lines:
+                quality_section += (
+                    f"\n## Automated Quality Checks — BLOCKING (failed = automatic FAIL)\n"
+                    + "\n".join(blocking_lines) + "\n"
+                )
+            if info_lines:
+                quality_section += (
+                    f"\n## Automated Quality Checks — Informational\n"
+                    + "\n".join(info_lines) + "\n"
+                )
 
         # Check if this is a re-review after user rejection (focus on specific feedback)
         user_rejection_context = ""
@@ -181,12 +216,14 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
             f"Review the implementation against the task requirements:\n\n"
             f"1. **Requirements** — For each subtask, state DONE / PARTIAL / MISSING\n"
             f"2. **Real Bugs Only** — Flag actual bugs: logic errors, SQL injection, data corruption, crashes. "
-            f"Do NOT flag: commit message format, code style, hypothetical edge cases, truncated diffs, "
+            f"Do NOT flag: code style, hypothetical edge cases, truncated diffs, "
             f"or files that seem unrelated (the developer may have valid reasons).\n"
             f"3. **Verdict** — PASS or FAIL.\n"
-            f"   - PASS if the core task requirements are met and no real bugs found\n"
-            f"   - FAIL only for: missing requirements, actual bugs, or security issues\n"
-            f"   - Do NOT fail for: cosmetic issues, commit format, informational warnings\n\n"
+            f"   - PASS if the core task requirements are met and no real bugs found and no BLOCKING checks failed\n"
+            f"   - FAIL for: missing requirements, actual bugs, security issues, OR any failed BLOCKING quality check\n"
+            f"   - Auto-commits ('auto-commit uncommitted agent changes') are ALWAYS a FAIL — "
+            f"tell the agent to run `git commit --amend -m` with a proper conventional commit message\n"
+            f"   - Do NOT fail for: cosmetic issues, informational warnings\n\n"
             f"Keep under 2000 characters. Be concise."
         )
 
