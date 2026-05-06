@@ -171,9 +171,10 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
     result_text = ""
     final_result = None
     captured_session_id = None
+    saw_rate_limit = False
 
     async def _stream_stdout():
-        nonlocal result_text, final_result, captured_session_id
+        nonlocal result_text, final_result, captured_session_id, saw_rate_limit
         while True:
             line = await process.stdout.readline()
             if not line:
@@ -185,6 +186,8 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
             try:
                 event = json.loads(decoded)
                 _handle_stream_event(event, task_gid)
+                if event.get("type") == "rate_limit_event":
+                    saw_rate_limit = True
                 # Stream text chunks to caller if requested
                 if on_text_chunk and event.get("type") == "assistant":
                     content = event.get("message", {}).get("content", [])
@@ -256,10 +259,12 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
     error_text = "".join(stderr_chunks)
     raw_output = "\n".join(stdout_lines)
 
-    # Detect rate limit errors from stderr or stdout
+    # Detect rate limit errors from stderr, stdout, or stream events
     combined = error_text + raw_output
     if "rate limit" in combined.lower() or "Rate limit" in combined:
         raise RuntimeError("API Error: Rate limit reached — wait a moment and retry")
+    if saw_rate_limit and task_gid:
+        add_log(task_gid, "[claude] Rate limit event detected during stream", "warning")
 
     # If no "result" event was captured, extract from stream-json events
     if not result_text:
@@ -288,6 +293,7 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
         "stderr": error_text,
         "text": result_text or "",
         "timed_out": timed_out,
+        "rate_limited": saw_rate_limit,
     }
     if final_result:
         result["parsed"] = final_result

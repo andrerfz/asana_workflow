@@ -6,6 +6,7 @@ orchestration loops that wire the phases together.
 """
 import asyncio
 import logging
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -707,13 +708,30 @@ async def _coding_test_qa_loop(task_gid: str, task: dict, task_context: str,
                 if not success:
                     return
 
-        # Phase: TESTING
-        if check_timeout(task_gid):
-            return
-        update_phase(task_gid, AgentPhase.TESTING)
-        await _broadcast_state(task_gid)
-
+        # Skip tests entirely if no commits were made — QA will catch the empty diff
+        run = load_agent_run(task_gid)
+        has_commits = False
         for repo_entry in run["repos"]:
+            wt = repo_entry.get("worktree_path")
+            default_branch = repo_entry.get("default_branch", "master")
+            if wt:
+                r = subprocess.run(
+                    ["git", "log", "--oneline", f"origin/{default_branch}...HEAD"],
+                    cwd=wt, capture_output=True, text=True, timeout=10,
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    has_commits = True
+                    break
+        if not has_commits:
+            add_log(task_gid, "No commits found after coding — skipping tests, going straight to QA", "warning")
+        else:
+            # Phase: TESTING
+            if check_timeout(task_gid):
+                return
+            update_phase(task_gid, AgentPhase.TESTING)
+            await _broadcast_state(task_gid)
+
+        for repo_entry in run["repos"] if has_commits else []:
             repo = get_repo(repo_entry["id"])
             if repo and repo_entry.get("worktree_path"):
                 test_cmd = select_test_cmd(repo, repo_entry["worktree_path"])
@@ -736,11 +754,15 @@ async def _coding_test_qa_loop(task_gid: str, task: dict, task_context: str,
         # Phase: QA REVIEW — pass quality results so QA can reference them
         qa_report = await agent_qa_review(task_gid, task, run, quality_results=quality)
         if qa_report is None:
-            add_log(task_gid, "QA review failed to produce a report — retrying in 30s...", "warning")
-            await asyncio.sleep(30)
+            add_log(task_gid, "QA review failed to produce a report — retrying in 90s...", "warning")
+            await asyncio.sleep(90)
+            qa_report = await agent_qa_review(task_gid, task, run, quality_results=quality)
+        if qa_report is None:
+            add_log(task_gid, "QA review still failing — retrying in 90s...", "warning")
+            await asyncio.sleep(90)
             qa_report = await agent_qa_review(task_gid, task, run, quality_results=quality)
         if not qa_report:
-            add_log(task_gid, "QA review could not produce a report after retry — stopping", "error")
+            add_log(task_gid, "QA review could not produce a report after retries — stopping", "error")
             update_phase(task_gid, AgentPhase.ERROR, error="QA review failed to produce a report")
             return
 
@@ -863,8 +885,12 @@ async def trigger_manual_qa(task_gid: str, task: dict):
 
             qa_report = await agent_qa_review(task_gid, task, current_run, quality_results=quality)
             if qa_report is None:
-                add_log(task_gid, "QA review failed — retrying in 30s...", "warning")
-                await asyncio.sleep(30)
+                add_log(task_gid, "QA review failed — retrying in 90s...", "warning")
+                await asyncio.sleep(90)
+                qa_report = await agent_qa_review(task_gid, task, current_run, quality_results=quality)
+            if qa_report is None:
+                add_log(task_gid, "QA review still failing — retrying in 90s...", "warning")
+                await asyncio.sleep(90)
                 qa_report = await agent_qa_review(task_gid, task, current_run, quality_results=quality)
             if not qa_report:
                 add_log(task_gid, "QA review could not produce a report", "error")

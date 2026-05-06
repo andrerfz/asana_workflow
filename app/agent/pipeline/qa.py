@@ -199,17 +199,18 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=cwd,
-            max_turns=3,
-            allowed_tools=[],
+            max_turns=8,
+            allowed_tools=["Read", "Glob", "Grep", "Bash"],
             system_prompt=(
                 "You are a pragmatic QA reviewer. Your goal is to verify that the task requirements "
                 "are met and catch real bugs. You are NOT looking for perfection — you are checking "
                 "if the code solves the problem and doesn't break anything. "
                 "Only FAIL for things that would actually cause problems in production. "
-                "Commit format, code style, and minor warnings are NOT reasons to fail."
+                "Commit format, code style, and minor warnings are NOT reasons to fail. "
+                "You may use Read, Glob, Grep, and Bash (read-only commands) to inspect the repo."
             ),
             task_gid=task_gid,
-            model="opus",
+            model="sonnet",
         )
 
         try:
@@ -282,7 +283,9 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
 
         # Treat very short responses as incomplete (rate limit / early cutoff) — caller will retry
         if len(qa_text) < 100:
-            add_log(task_gid, f"QA response too short ({len(qa_text)} chars) — likely truncated by rate limit, treating as failed", "warning")
+            rate_limited = result.get("rate_limited", False)
+            reason = "rate limit event in stream" if rate_limited else "likely truncated"
+            add_log(task_gid, f"QA response too short ({len(qa_text)} chars) — {reason}, treating as failed", "warning")
             return None
 
         add_log(task_gid, f"QA review generated ({len(qa_text)} chars)")
