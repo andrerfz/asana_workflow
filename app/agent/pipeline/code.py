@@ -44,7 +44,11 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
             f"Do NOT cd or navigate to any other directory. All file paths are relative to cwd. "
             f"NEVER run git merge, git rebase, git pull, or git checkout of other branches. "
             f"Branch references or MR links in the task are historical context — that work is already in your branch. "
-            f"Commit your changes when done.{docker_hint}{test_hint}"
+            f"Commit your changes when done.{docker_hint}{test_hint} "
+            f"IMPLEMENTATION BUDGET: You have 30 turns. The investigation is already done — do NOT re-read the "
+            f"entire codebase. The plan tells you exactly which files to change. Open only those files, make the "
+            f"changes, and commit. If you spend more than 5 turns reading without writing any code, you will run "
+            f"out of turns and produce zero commits. START WRITING CODE IN YOUR FIRST 3 TURNS."
         )
 
         commit_instructions = (
@@ -70,7 +74,15 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
         if latest_run and latest_run.get("plan"):
             plan = latest_run["plan"]
 
-        prompt = f"{context}\n\n## Approved Plan\n{plan}\n\n{commit_instructions}\n\nImplement the plan now."
+        prompt = (
+            f"{context}\n\n## Approved Plan\n{plan}\n\n{commit_instructions}\n\n"
+            f"## ACTION REQUIRED\n"
+            f"The investigation is complete. The plan above tells you exactly what to change.\n"
+            f"DO NOT re-read the entire codebase. Open the specific files from the plan, make the changes, commit.\n"
+            f"Your first tool call must be Write or Edit — not Read or Grep.\n"
+            f"If you need to verify a single detail, one Read is acceptable. Then write code immediately.\n"
+            f"Produce at least one commit before this session ends."
+        )
 
         add_log(task_gid, f"[{repo_entry['id']}] Claude Code starting (plan: {plan[:80]}...)")
 
@@ -181,6 +193,41 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
             cli_text = result.get("text", "")[:500]
             if cli_text:
                 add_log(task_gid, f"[{repo_entry['id']}] CLI output: {cli_text}", "info")
+
+            # Auto-resume once if rate limit hit or agent ran out of turns without committing
+            session_id = result.get("session_id")
+            if session_id and not result.get("_resumed_once"):
+                add_log(task_gid, f"[{repo_entry['id']}] 0 commits — auto-resuming session to force implementation", "warning")
+                timer = agent_timers.get(task_gid)
+                resume_result = await _run_claude_cli(
+                    prompt=(
+                        "You did not write any code or make any commits in the previous session. "
+                        "The investigation is complete. You know which files to change. "
+                        "Open the specific files from the plan RIGHT NOW and write the implementation. "
+                        "Do NOT read any more files. Write the code, then commit it. "
+                        "This is your final chance — produce at least one commit."
+                    ),
+                    cwd=wt_path,
+                    max_turns=20,
+                    allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+                    system_prompt=system,
+                    task_gid=task_gid,
+                    resume_session_id=session_id,
+                    subprocess_timeout=timer.remaining if timer else None,
+                )
+                resume_result["_resumed_once"] = True
+                try:
+                    _accumulate_cost(task_gid, resume_result)
+                except Exception:
+                    pass
+                auto_commit_if_dirty(wt_path, repo_entry["id"], task_gid)
+                wt_status = get_worktree_status(task_gid, repo_entry["id"])
+                if wt_status:
+                    repo_entry["commits"] = wt_status.get("commit_count", 0)
+                if repo_entry["commits"] > 0:
+                    add_log(task_gid, f"[{repo_entry['id']}] Auto-resume produced {repo_entry['commits']} commits")
+                else:
+                    add_log(task_gid, f"[{repo_entry['id']}] Auto-resume still produced 0 commits", "warning")
 
         add_log(task_gid, f"[{repo_entry['id']}] Coding complete ({repo_entry['commits']} commits)")
         return True
