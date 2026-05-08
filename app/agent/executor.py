@@ -265,13 +265,23 @@ async def answer_question(task_gid: str, answer: str) -> bool:
 
     old_phase = run["phase"]
     answer_lower = answer.strip().lower()
+    worker_alive = task_gid in _active_workers and not _active_workers[task_gid].done()
+
     if old_phase == AgentPhase.AWAITING_APPROVAL.value:
         if answer_lower == "approve":
             run["phase"] = AgentPhase.CODING.value
         elif answer_lower == "reject":
             run["phase"] = AgentPhase.CANCELLED.value
         elif answer_lower.startswith("revise:"):
-            run["phase"] = AgentPhase.PLANNING.value
+            if worker_alive:
+                # Worker is alive — let it handle the phase transition
+                run["phase"] = AgentPhase.PLANNING.value
+            else:
+                # Worker died (e.g. server restart) — the revise answer will never be picked up.
+                # Surface as error so the user knows to restart the agent.
+                run["phase"] = AgentPhase.ERROR.value
+                run["error"] = "Worker died before the revise feedback could be processed. Start the agent again with your feedback."
+                run["question"] = None
     elif old_phase == AgentPhase.QA_REVIEW.value:
         if answer_lower == "approve":
             run["phase"] = AgentPhase.DONE.value
