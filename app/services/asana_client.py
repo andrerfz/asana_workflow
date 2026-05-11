@@ -1,5 +1,6 @@
 """Asana REST API wrapper — all HTTP calls live here."""
 import logging
+import os
 import httpx
 from fastapi import HTTPException
 
@@ -19,7 +20,12 @@ async def _paginated_get(url: str, params: dict, headers: dict, retries: int = 2
     """Generic paginated GET helper with retry on transient connection errors."""
     import asyncio
     results = []
-    async with httpx.AsyncClient(timeout=30) as client:
+    # trust_env=False skips httpx's NO_PROXY parsing — OrbStack injects IPv6 CIDR
+    # entries (e.g. fd07:b51a:cc66:f0::/64) that httpx cannot parse as port numbers.
+    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or \
+                os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    async with httpx.AsyncClient(timeout=30, trust_env=False,
+                                 proxy=proxy_url or None) as client:
         while url:
             last_exc = None
             for attempt in range(1 + retries):
