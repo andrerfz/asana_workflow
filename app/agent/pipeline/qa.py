@@ -237,6 +237,7 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
             prompt=prompt,
             cwd=cwd,
             max_turns=8,
+            subprocess_timeout=600.0,  # 10 min hard cap — QA should finish in 2-3 min
             allowed_tools=["Read", "Glob", "Grep", "Bash"],
             system_prompt=(
                 "You are a pragmatic QA reviewer. Your goal is to verify that the task requirements "

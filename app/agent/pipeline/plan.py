@@ -55,6 +55,7 @@ async def agent_plan(task_gid: str, context: str, run: dict) -> Optional[str]:
             allowed_tools=[],
             system_prompt=system,
             task_gid=task_gid,
+            subprocess_timeout=180.0,  # 3 min hard cap — max_turns=1, no tools
         )
 
         plan_text = result.get("text", "").strip()

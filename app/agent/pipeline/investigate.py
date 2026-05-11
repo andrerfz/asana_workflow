@@ -137,6 +137,8 @@ async def agent_investigate(task_gid: str, context: str, run: dict) -> Optional[
         )
 
         timer = agent_timers.get(task_gid)
+        # Hard cap: investigation must finish in 10 min — anchors make it fast now
+        phase_timeout = min(600.0, timer.remaining if timer else 600.0)
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=wt_path,
@@ -145,7 +147,7 @@ async def agent_investigate(task_gid: str, context: str, run: dict) -> Optional[
             system_prompt=system,
             task_gid=task_gid,
             model="opus",
-            subprocess_timeout=timer.remaining if timer else None,
+            subprocess_timeout=phase_timeout,
         )
 
         report = result.get("text", "").strip()
