@@ -64,26 +64,14 @@ async def agent_investigate(task_gid: str, context: str, run: dict) -> Optional[
             "Keep it under 800 words. Focus on FACTS you found in the code, not assumptions."
         )
 
-        skill_instruction = (
-            "\n\n## Skills\n"
-            "Before exploring manually, check if any available skill matches this task type and invoke it "
-            "with the Skill tool — it will return richer diagnostic context than manual exploration.\n"
-            "Examples of when to invoke a skill:\n"
-            "- Bug, error, unexpected behavior, regression → `Skill(skill='fix-issues')`\n"
-            "- Database data discrepancy or query → `Skill(skill='db-query')`\n"
-            "- Security concern → `Skill(skill='security-review')`\n"
-            "Invoke the matching skill FIRST, then continue investigating manually as needed. "
-            "If no skill matches, skip this step."
-        )
-
-        prompt = f"{context}{claude_guides}{skill_instruction}\n\nInvestigate the codebase and produce a report. Use Read, Glob, and Grep tools to explore."
+        prompt = f"{context}{claude_guides}\n\nInvestigate the codebase and produce a report. Use Read, Glob, and Grep tools to explore."
 
         timer = agent_timers.get(task_gid)
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=wt_path,
             max_turns=15,
-            allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)", "Skill", "ToolSearch"],
+            allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)"],
             system_prompt=system,
             task_gid=task_gid,
             model="opus",
