@@ -125,8 +125,8 @@ async def start_agent(task_gid: str, task: dict, branch_slug: str,
         raise
 
 
-async def resume_agent(task_gid: str, task: dict, feedback: str) -> dict:
-    """Resume a done/error agent with user feedback, reusing existing worktrees."""
+async def resume_agent(task_gid: str, task: dict, feedback: str = "") -> dict:
+    """Resume a done/error agent, reusing existing worktrees. Pass empty feedback to let the agent read Asana."""
     if task_gid in _active_workers and not _active_workers[task_gid].done():
         raise ValueError(f"Agent already running for task {task_gid}")
 
@@ -591,18 +591,27 @@ async def _run_agent_resumed(task_gid: str, task: dict, feedback: str,
         if prev_plan:
             task_context += f"\n\n## Implementation Plan (from previous run)\n{prev_plan}"
 
-        resume_section = "\n\n## Resume Feedback\n"
+        resume_section = "\n\n## Resume Context\n"
         resume_section += "The agent previously ran on this task "
         if prev_error:
             resume_section += f"and encountered an error: {prev_error}\n\n"
         else:
             resume_section += "and completed.\n\n"
-        resume_section += (
-            f"The user is resuming with the following feedback:\n\n{feedback}\n\n"
-            "IMPORTANT: The branch already has previous work. Review what exists, "
-            "then apply ONLY the changes described in the feedback above. "
-            "Do NOT redo work that is already done."
-        )
+
+        if feedback:
+            resume_section += (
+                f"The user is resuming with the following feedback:\n\n{feedback}\n\n"
+                "IMPORTANT: The branch already has previous work. Review what exists, "
+                "then apply ONLY the changes described in the feedback above. "
+                "Do NOT redo work that is already done."
+            )
+        else:
+            resume_section += (
+                "The user resumed without explicit feedback — read the Asana task comments and "
+                "open subtasks above to determine what needs to be done next. "
+                "The branch already has previous work. Review the existing commits, then implement "
+                "whatever is requested in the latest Asana comments or open subtasks."
+            )
         task_context += resume_section
 
         settings = load_agent_settings()

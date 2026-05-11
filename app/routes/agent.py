@@ -176,14 +176,12 @@ class GuideAgent(BaseModel):
 
 
 class ResumeAgent(BaseModel):
-    feedback: str
+    feedback: str = ""
 
     @field_validator("feedback")
     @classmethod
     def validate_feedback(cls, v):
-        if not v or not v.strip():
-            raise ValueError("Feedback cannot be empty")
-        return v.strip()
+        return v.strip() if v else ""
 
 
 @router.post("/resume/{task_gid}")

@@ -401,8 +401,7 @@ async function guideAgent(gid, btn) {
 
 async function resumeAgent(gid, btn) {
   const input = document.getElementById(`agent-resume-${gid}`);
-  const feedback = input?.value?.trim();
-  if (!feedback) { showToast('Describe what the agent should do', 'error'); return; }
+  const feedback = input?.value?.trim() || '';
 
   return CardUI.wrap(gid, async () => {
     const res = await fetch(`/api/agent/resume/${gid}`, {
@@ -418,7 +417,7 @@ async function resumeAgent(gid, btn) {
     const run = await res.json();
     agentStatuses[gid] = run;
     renderTasks();
-    showToast('Agent resumed with your feedback');
+    showToast(feedback ? 'Agent resumed with your feedback' : 'Agent resumed — reading Asana for latest context');
   }, 'Resuming...');
 }
 
