@@ -160,18 +160,23 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
             update_phase(task_gid, AgentPhase.ERROR, error=f"Coding timed out (25 min cap).{detail}")
             return False
 
+        # Always save uncommitted work BEFORE checking exit code — the agent may
+        # have written files but been cut off by a rate limit before committing
+        auto_commit_if_dirty(wt_path, repo_entry["id"], task_gid)
+
         if result["returncode"] != 0:
             error = result.get("stderr", "") or result.get("text", "Unknown error")
-            # Ignore non-zero exit from guided termination (process was killed)
             run = load_agent_run(task_gid)
+            # Ignore non-zero exit from guided termination (process was killed)
             if run and run.get("pending_guide"):
                 pass
+            # Ignore exit 1 caused by rate limit — agent did real work, just got cut off
+            elif result.get("rate_limited"):
+                add_log(task_gid, f"[{repo_entry['id']}] Exit 1 due to rate limit — continuing with saved work", "warning")
             else:
                 add_log(task_gid, f"[{repo_entry['id']}] Coding failed (exit {result['returncode']}): {error[:500]}", "error")
                 update_phase(task_gid, AgentPhase.ERROR, error=f"Claude Code error: {error[:200]}")
                 return False
-
-        auto_commit_if_dirty(wt_path, repo_entry["id"], task_gid)
 
         wt_status = get_worktree_status(task_gid, repo_entry["id"])
         if wt_status:
