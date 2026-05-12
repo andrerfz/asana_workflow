@@ -584,35 +584,31 @@ async def _run_agent_resumed(task_gid: str, task: dict, feedback: str,
         subtasks_context = await _fetch_subtasks_context(task_gid)
         branch_state = _get_branch_state(run)
 
-        task_context = build_task_context(task, run) + comments_context + subtasks_context + branch_state
+        # User feedback goes FIRST — highest priority instruction before any context
+        if feedback:
+            user_instruction = (
+                f"## ⚠ USER INSTRUCTION (read this first)\n"
+                f"{feedback}\n\n"
+                f"This is what the user wants you to do. Everything below is context to help you do it.\n"
+                f"Focus ONLY on the user instruction above. Do NOT redo work already done on the branch.\n\n"
+            )
+        else:
+            user_instruction = (
+                f"## Resume — read Asana for next steps\n"
+                f"The user resumed without explicit feedback. Read the open subtasks and latest comments "
+                f"below to determine what needs to be done. The branch already has previous work — "
+                f"review existing commits first, then implement only what is missing.\n\n"
+            )
+
+        task_context = user_instruction + build_task_context(task, run) + comments_context + subtasks_context + branch_state
 
         if prev_investigation:
             task_context += f"\n\n## Investigation Report (from previous run)\n{prev_investigation}"
         if prev_plan:
             task_context += f"\n\n## Implementation Plan (from previous run)\n{prev_plan}"
 
-        resume_section = "\n\n## Resume Context\n"
-        resume_section += "The agent previously ran on this task "
         if prev_error:
-            resume_section += f"and encountered an error: {prev_error}\n\n"
-        else:
-            resume_section += "and completed.\n\n"
-
-        if feedback:
-            resume_section += (
-                f"The user is resuming with the following feedback:\n\n{feedback}\n\n"
-                "IMPORTANT: The branch already has previous work. Review what exists, "
-                "then apply ONLY the changes described in the feedback above. "
-                "Do NOT redo work that is already done."
-            )
-        else:
-            resume_section += (
-                "The user resumed without explicit feedback — read the Asana task comments and "
-                "open subtasks above to determine what needs to be done next. "
-                "The branch already has previous work. Review the existing commits, then implement "
-                "whatever is requested in the latest Asana comments or open subtasks."
-            )
-        task_context += resume_section
+            task_context += f"\n\n## Previous Error\nThe agent previously failed with: {prev_error}"
 
         settings = load_agent_settings()
         if settings.get("section_on_start"):

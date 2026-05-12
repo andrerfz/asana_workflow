@@ -348,11 +348,16 @@ function agentPanelHTML(gid, agent) {
 
   // Resume with feedback — available on done/error when worktrees exist
   if (['done', 'error'].includes(agent.phase) && agent.repos && agent.repos.some(r => r.worktree_path)) {
+    const prevFeedback = agent.resume_feedback ? agent.resume_feedback.replace(/`/g, '\\`') : '';
+    const feedbackHint = prevFeedback
+      ? `<div style="font-size:10px;color:#f59e0b;margin-bottom:4px">⟳ Previous feedback preserved — edit or clear before resuming</div>`
+      : '';
     html += `<div class="agent-resume" style="margin-top:8px;padding:10px 12px;background:rgba(245,158,11,0.07);border-left:3px solid #f59e0b;border-radius:4px">
       <div style="font-size:11px;font-weight:600;color:#f59e0b;margin-bottom:6px">Resume</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:6px">Leave blank to let the agent read Asana for the latest comments and subtasks. Or describe what to fix.</div>
+      ${feedbackHint}
       <div style="display:flex;gap:6px;align-items:flex-end">
-        <textarea class="form-input" id="agent-resume-${gid}" placeholder="Leave blank to resume from Asana context, or type specific feedback..." rows="2" style="flex:1;font-size:12px;resize:vertical;min-height:44px" ${busy?'disabled':''}></textarea>
+        <textarea class="form-input" id="agent-resume-${gid}" placeholder="Leave blank to resume from Asana context, or type specific feedback..." rows="2" style="flex:1;font-size:12px;resize:vertical;min-height:44px" ${busy?'disabled':''}>${prevFeedback}</textarea>
         <button class="btn" onclick="resumeAgent('${gid}',this)" ${dis} style="align-self:flex-end;font-size:11px;padding:4px 12px;background:#f59e0b;color:#fff;border:none;border-radius:4px;font-weight:600">Resume</button>
       </div>
     </div>`;
