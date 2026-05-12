@@ -238,7 +238,10 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
         return True
 
     except Exception as e:
-        add_log(task_gid, f"[{repo_entry['id']}] Coding failed: {e}", "error")
+        import traceback
+        tb = traceback.format_exc()
+        add_log(task_gid, f"[{repo_entry['id']}] Coding failed: {e} | {tb.splitlines()[-3] if tb else ''}", "error")
+        log.exception("Coding phase error for task %s repo %s", task_gid, repo_entry.get('id'))
         update_phase(task_gid, AgentPhase.ERROR, error=str(e))
         return False
 

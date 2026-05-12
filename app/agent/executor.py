@@ -621,9 +621,12 @@ async def _run_agent_resumed(task_gid: str, task: dict, feedback: str,
         update_phase(task_gid, AgentPhase.CANCELLED)
         raise
     except Exception as e:
+        import traceback as _tb
+        tb_lines = _tb.format_exc().splitlines()
+        location = next((l.strip() for l in reversed(tb_lines) if l.strip().startswith('File "') and '/app/' in l), '')
         log.exception("Resumed agent error for task %s", task_gid)
         update_phase(task_gid, AgentPhase.ERROR, error=str(e))
-        add_log(task_gid, f"Agent error: {e}", "error")
+        add_log(task_gid, f"Agent error: {e} | {location}", "error")
         await _broadcast_state(task_gid)
         await _post_asana_comment(task_gid, f"🤖 Agent failed (resumed): {str(e)[:500]}", dedup_prefix="🤖 Agent failed (resumed):")
         settings = load_agent_settings()
