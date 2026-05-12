@@ -142,7 +142,7 @@ async def agent_investigate(task_gid: str, context: str, run: dict) -> Optional[
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=wt_path,
-            max_turns=15,
+            max_turns=20,
             allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)"],
             system_prompt=system,
             task_gid=task_gid,
