@@ -141,7 +141,9 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
         cmd.extend(["--model", model])
 
     # --dangerously-skip-permissions avoids interactive prompts in headless mode
-    cmd.append("--dangerously-skip-permissions")
+    # --skip-memory skips auto-loading CLAUDE.md/memory files — we inject them manually
+    # in the prompt, so letting the CLI load them again doubles the token cost
+    cmd.extend(["--dangerously-skip-permissions", "--skip-memory"])
 
     cli_env = {k: v for k, v in os.environ.items() if k in _ALLOWED_ENV_KEYS}
 

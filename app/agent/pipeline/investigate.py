@@ -146,7 +146,7 @@ async def agent_investigate(task_gid: str, context: str, run: dict) -> Optional[
             allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)"],
             system_prompt=system,
             task_gid=task_gid,
-            model="opus",
+            model="sonnet",  # opus unnecessary now that anchors guide the search
             subprocess_timeout=phase_timeout,
         )
 
