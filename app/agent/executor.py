@@ -681,6 +681,9 @@ async def _coding_test_qa_loop(task_gid: str, task: dict, task_context: str,
         if check_timeout(task_gid):
             return
         run = load_agent_run(task_gid)
+        if not run:
+            add_log(task_gid, "Run data missing at coding loop start — aborting", "error")
+            return
         run["qa_report"] = None
         run["question"] = None
         for repo_entry in run["repos"]:
