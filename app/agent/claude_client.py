@@ -185,7 +185,7 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
             stdout_lines.append(decoded)
             try:
                 event = json.loads(decoded)
-                _handle_stream_event(event, task_gid)
+                _handle_stream_event_tracking(event, task_gid)
                 if event.get("type") == "rate_limit_event":
                     saw_rate_limit = True
                 # Stream text chunks to caller if requested
@@ -214,20 +214,47 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                 break
             stderr_chunks.append(chunk.decode("utf-8", errors="replace"))
 
+    # Track last meaningful action for heartbeat context
+    last_action: list[str] = ["(starting...)"]
+
+    original_handle = _handle_stream_event
+
+    def _handle_stream_event_tracking(event: dict, tgid: str | None):
+        original_handle(event, tgid)
+        etype = event.get("type", "")
+        if etype == "tool_use":
+            name = event.get("name", "?")
+            inp = event.get("input", {})
+            detail = inp.get("file_path") or inp.get("command", "")[:60] or inp.get("pattern", "")
+            last_action[0] = f"{name}: {detail}" if detail else name
+        elif etype == "assistant":
+            content = event.get("message", {}).get("content", [])
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "").strip()
+                    if text:
+                        last_action[0] = text[:80].replace("\n", " ")
+                    break
+        elif etype == "rate_limit_event":
+            last_action[0] = "⏳ rate limit — waiting for API quota..."
+            if tgid:
+                add_log(tgid, "[claude] Rate limit hit — pausing until quota resets", "warning")
+
     # Heartbeat: log "still working..." every 30s if no events received
     async def _heartbeat():
         last_count = 0
-        elapsed = 0
+        silent_seconds = 0
         while process.returncode is None:
             await asyncio.sleep(30)
-            elapsed += 30
+            silent_seconds += 30
             if process.returncode is not None:
                 break
-            if len(stdout_lines) == last_count and task_gid:
-                add_log(task_gid, f"[claude] Still working... ({elapsed}s elapsed)", "debug")
+            if len(stdout_lines) == last_count:
+                if task_gid:
+                    add_log(task_gid, f"[claude] Still working... ({silent_seconds}s silent) — last: {last_action[0]}", "debug")
             else:
                 last_count = len(stdout_lines)
-                elapsed = 0  # reset after activity
+                silent_seconds = 0  # reset after activity
 
     heartbeat_task = asyncio.create_task(_heartbeat())
     timed_out = False
