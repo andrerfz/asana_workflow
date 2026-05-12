@@ -87,7 +87,9 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
         add_log(task_gid, f"[{repo_entry['id']}] Claude Code starting (plan: {plan[:80]}...)")
 
         timer = agent_timers.get(task_gid)
-        subprocess_timeout = timer.remaining if timer else None
+        # Cap coding at 25 min — enough for real work, prevents silent rate-limit stalls
+        # from consuming the full 45-min agent budget with no output
+        subprocess_timeout = min(1500.0, timer.remaining if timer else 1500.0)
 
         result = await _run_claude_cli(
             prompt=prompt,
@@ -120,6 +122,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
             add_log(task_gid, f"[{repo_entry['id']}] Resuming session with user guidance...")
             save_agent_run(task_gid, run)  # persist the pop
             timer = agent_timers.get(task_gid)
+            guide_timeout = min(1500.0, timer.remaining if timer else 1500.0)
             guide_result = await _run_claude_cli(
                 prompt=pending_guide["feedback"],
                 cwd=wt_path,
@@ -128,7 +131,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
                 system_prompt=system,
                 task_gid=task_gid,
                 resume_session_id=pending_guide["session_id"],
-                subprocess_timeout=timer.remaining if timer else None,
+                subprocess_timeout=guide_timeout,
             )
             try:
                 _accumulate_cost(task_gid, guide_result)
@@ -151,8 +154,10 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
         if result.get("timed_out"):
             timer = agent_timers.get(task_gid)
             mins = timer.elapsed_minutes if timer else "?"
-            add_log(task_gid, f"[{repo_entry['id']}] Coding timed out after {mins} minutes of active work", "error")
-            update_phase(task_gid, AgentPhase.ERROR, error=f"Agent work-time timeout ({mins} minutes of active work)")
+            last_text = (result.get("text") or "")[:200]
+            detail = f" Last output: {last_text}" if last_text else " (no output — likely rate-limit stall)"
+            add_log(task_gid, f"[{repo_entry['id']}] Coding timed out (25 min cap).{detail}", "error")
+            update_phase(task_gid, AgentPhase.ERROR, error=f"Coding timed out (25 min cap).{detail}")
             return False
 
         if result["returncode"] != 0:
@@ -213,7 +218,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
                     system_prompt=system,
                     task_gid=task_gid,
                     resume_session_id=session_id,
-                    subprocess_timeout=timer.remaining if timer else None,
+                    subprocess_timeout=min(900.0, timer.remaining if timer else 900.0),  # 15 min for auto-resume
                 )
                 resume_result["_resumed_once"] = True
                 try:
