@@ -16,16 +16,20 @@ def _headers() -> dict:
     return {"Authorization": f"Bearer {ASANA_PAT}"}
 
 
+def _http_client(timeout: float = 15) -> httpx.AsyncClient:
+    """Return an httpx client that bypasses OrbStack's broken NO_PROXY IPv6 CIDRs."""
+    proxy_url = (
+        os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or
+        os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    )
+    return httpx.AsyncClient(timeout=timeout, trust_env=False, proxy=proxy_url or None)
+
+
 async def _paginated_get(url: str, params: dict, headers: dict, retries: int = 2) -> list[dict]:
     """Generic paginated GET helper with retry on transient connection errors."""
     import asyncio
     results = []
-    # trust_env=False skips httpx's NO_PROXY parsing — OrbStack injects IPv6 CIDR
-    # entries (e.g. fd07:b51a:cc66:f0::/64) that httpx cannot parse as port numbers.
-    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or \
-                os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
-    async with httpx.AsyncClient(timeout=30, trust_env=False,
-                                 proxy=proxy_url or None) as client:
+    async with _http_client(timeout=30) as client:
         while url:
             last_exc = None
             for attempt in range(1 + retries):
@@ -131,7 +135,7 @@ async def update_task(task_gid: str, custom_fields: dict):
     headers = _headers()
     url = f"{ASANA_BASE}/tasks/{task_gid}"
     payload = {"data": {"custom_fields": custom_fields}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.put(url, headers=headers, json=payload)
         if resp.status_code != 200:
             raise HTTPException(resp.status_code, f"Asana update error: {resp.text}")
@@ -170,7 +174,7 @@ async def add_task_comment(task_gid: str, text: str) -> dict:
     headers = _headers()
     url = f"{ASANA_BASE}/tasks/{task_gid}/stories"
     payload = {"data": {"text": text}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code not in (200, 201):
             log.error("Failed to post comment on %s: %s", task_gid, resp.text[:300])
@@ -182,7 +186,7 @@ async def delete_story(story_gid: str) -> bool:
     """Delete a story/comment from Asana."""
     headers = _headers()
     url = f"{ASANA_BASE}/stories/{story_gid}"
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.delete(url, headers=headers)
         if resp.status_code not in (200, 204):
             log.error("Failed to delete story %s: %s", story_gid, resp.text[:300])
@@ -195,7 +199,7 @@ async def complete_subtask(subtask_gid: str) -> bool:
     headers = _headers()
     url = f"{ASANA_BASE}/tasks/{subtask_gid}"
     payload = {"data": {"completed": True}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.put(url, headers=headers, json=payload)
         if resp.status_code != 200:
             log.error("Failed to complete subtask %s: %s", subtask_gid, resp.text[:300])
@@ -208,7 +212,7 @@ async def create_subtask(parent_gid: str, name: str) -> dict:
     headers = _headers()
     url = f"{ASANA_BASE}/tasks/{parent_gid}/subtasks"
     payload = {"data": {"name": name}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code not in (200, 201):
             log.error("Failed to create subtask '%s' for %s: %s", name, parent_gid, resp.text[:300])
@@ -221,7 +225,7 @@ async def update_task_name(task_gid: str, name: str) -> bool:
     headers = _headers()
     url = f"{ASANA_BASE}/tasks/{task_gid}"
     payload = {"data": {"name": name}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.put(url, headers=headers, json=payload)
         if resp.status_code != 200:
             log.error("Failed to rename task %s: %s", task_gid, resp.text[:300])
@@ -234,7 +238,7 @@ async def move_task_to_section(task_gid: str, section_gid: str) -> bool:
     headers = _headers()
     url = f"{ASANA_BASE}/sections/{section_gid}/addTask"
     payload = {"data": {"task": task_gid}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code != 200:
             log.error("Failed to move task %s to section %s: %s", task_gid, section_gid, resp.text[:300])
@@ -247,7 +251,7 @@ async def create_section(name: str) -> str | None:
     headers = _headers()
     url = f"{ASANA_BASE}/projects/{PROJECT_GID}/sections"
     payload = {"data": {"name": name}}
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with _http_client() as client:
         resp = await client.post(url, headers=headers, json=payload)
         if resp.status_code not in (200, 201):
             log.error("Failed to create section '%s': %s", name, resp.text[:300])

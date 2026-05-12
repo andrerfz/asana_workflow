@@ -107,7 +107,8 @@ async def generate_branch_name(task_gid: str):
         f"Description: {(task.get('notes', '') or '')[:200]}"
     )
 
-    async with httpx.AsyncClient() as client:
+    proxy_url = __import__('os').environ.get("HTTPS_PROXY") or __import__('os').environ.get("https_proxy")
+    async with httpx.AsyncClient(trust_env=False, proxy=proxy_url or None) as client:
         resp = await client.post(
             ANTHROPIC_BASE,
             headers={

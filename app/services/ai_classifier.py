@@ -201,7 +201,8 @@ async def ai_classify_task(task: dict, force: bool = False) -> Optional[dict]:
     }
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        proxy_url = __import__('os').environ.get("HTTPS_PROXY") or __import__('os').environ.get("https_proxy")
+        async with httpx.AsyncClient(timeout=30, trust_env=False, proxy=proxy_url or None) as client:
             resp = await client.post(ANTHROPIC_BASE, headers=headers, json=payload)
             if resp.status_code != 200:
                 log.error("Claude API %s: %s", resp.status_code, resp.text[:500])
