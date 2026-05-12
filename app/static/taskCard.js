@@ -232,11 +232,10 @@ function agentPanelHTML(gid, agent) {
     </details>`;
   }
 
-  // Plan approval (show during awaiting_approval and planning/revise)
-  if (['awaiting_approval', 'planning'].includes(agent.phase) && agent.plan) {
-    html += `<div class="agent-plan">
-      <div class="agent-plan-title">Implementation Plan</div>
-      <pre class="agent-plan-text">${esc(agent.plan)}</pre>
+  // Plan — show with actions during awaiting_approval/planning, read-only in all other phases
+  if (agent.plan) {
+    const needsApproval = ['awaiting_approval', 'planning'].includes(agent.phase);
+    const planActions = needsApproval ? `
       <div class="agent-plan-actions">
         <button class="btn btn-agent-approve" onclick="approveAgentPlan('${gid}',this)" ${dis}>Approve</button>
         <button class="btn btn-agent-reject" onclick="rejectAgentPlan('${gid}',this)" ${dis}>Reject</button>
@@ -244,7 +243,11 @@ function agentPanelHTML(gid, agent) {
       <div style="margin-top:8px;display:flex;gap:6px;align-items:flex-end">
         <textarea class="form-input" id="agent-revise-${gid}" placeholder="Feedback to revise the plan..." rows="3" style="flex:1;font-size:12px;resize:vertical;min-height:60px" ${busy?'disabled':''}></textarea>
         <button class="btn btn-agent-revise" onclick="reviseAgentPlan('${gid}',this)" ${dis} style="align-self:flex-end">Revise</button>
-      </div>
+      </div>` : '';
+    html += `<div class="agent-plan">
+      <div class="agent-plan-title">Implementation Plan</div>
+      <pre class="agent-plan-text">${esc(agent.plan)}</pre>
+      ${planActions}
     </div>`;
   }
 
