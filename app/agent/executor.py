@@ -146,7 +146,7 @@ async def resume_agent(task_gid: str, task: dict, feedback: str = "") -> dict:
         raise ValueError("No valid worktrees remain — use Start Agent instead")
 
     # Check if previous investigation flagged additional repos that were never created
-    prev_investigation = prev_run.get("investigation", "")
+    prev_investigation = prev_run.get("investigation") or ""
     if prev_investigation:
         missing_repos = parse_additional_repos(prev_investigation, {"repos": valid_repos})
         if missing_repos:
@@ -177,8 +177,8 @@ async def resume_agent(task_gid: str, task: dict, feedback: str = "") -> dict:
             raise ValueError(cli_status["error"])
 
         # Preserve previous context
-        prev_plan = prev_run.get("plan", "")
-        prev_error = prev_run.get("error", "")
+        prev_plan = prev_run.get("plan") or ""
+        prev_error = prev_run.get("error") or ""
 
         # Reset the run state for a new cycle, keeping repos/worktrees
         for repo_entry in valid_repos:

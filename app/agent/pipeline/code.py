@@ -20,7 +20,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
     """Run the coding phase for a single repo."""
     try:
         wt_path = repo_entry["worktree_path"]
-        plan = run.get("plan", "")
+        plan = run.get("plan") or ""
 
         repo = get_repo(repo_entry["id"])
         docker_hint = ""
