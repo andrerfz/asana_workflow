@@ -135,15 +135,39 @@
   font-weight: 500;
 }
 
+.table-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
 .table-cluster {
   font-size: 11px;
-  color: var(--ion-color-primary);
-  margin-right: 6px;
+  font-weight: 600;
+}
+
+.table-section {
+  font-size: 11px;
+  color: var(--ion-color-medium);
 }
 
 .table-scope {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--ion-color-primary);
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.table-tipo {
   font-size: 11px;
   color: var(--ion-color-medium);
+  font-style: italic;
 }
 
 .cluster-group {
