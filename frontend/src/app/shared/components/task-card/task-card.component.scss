@@ -87,9 +87,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   margin-top: auto;
   padding-top: 8px;
   gap: 4px;
+  min-width: 0;
 }
 
 .action-icons {
@@ -97,16 +99,20 @@
   align-items: center;
   gap: 0;
   margin-left: auto;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .branch-btn {
-  max-width: 110px;
+  max-width: 96px;
+  min-width: 0;
   span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 10px;
     font-family: monospace;
+    max-width: 70px;
   }
 }
 
