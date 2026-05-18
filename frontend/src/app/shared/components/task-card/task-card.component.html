@@ -5,7 +5,7 @@
       <span class="cluster-tag" *ngIf="clusterName" [style.background]="clusterColor + '22'" [style.color]="clusterColor">
         {{ clusterName }}
       </span>
-      <span class="scope-tag" *ngIf="scopeLabel">{{ scopeLabel }}</span>
+      <span class="scope-tag" *ngIf="scopeLabel" title="Scope: {{ scopeLabel }}">⬡ {{ scopeLabel }}</span>
     </div>
     <ion-card-title class="task-name">{{ task.name }}</ion-card-title>
   </ion-card-header>
