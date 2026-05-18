@@ -36,11 +36,11 @@ export class AgentStateService {
     try {
       const [tasksRes, agentsRes] = await Promise.all([
         firstValueFrom(this.http.get<{ tasks: Task[] }>('/api/tasks')),
-        firstValueFrom(this.http.get<AgentRun[]>('/api/agent')),
+        firstValueFrom(this.http.get<{ agents: AgentRun[] }>('/api/agent')),
       ]);
       this.tasks.set(tasksRes.tasks ?? []);
       const runsMap: Record<string, AgentRun> = {};
-      for (const run of (agentsRes ?? [])) {
+      for (const run of (agentsRes?.agents ?? [])) {
         runsMap[run.task_gid] = run;
       }
       this.agentRuns.set(runsMap);
