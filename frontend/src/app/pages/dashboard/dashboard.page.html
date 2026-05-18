@@ -172,9 +172,11 @@
         (click)="openTask(task.task_gid)">
         <ion-label>
           <h3 class="table-task-name">{{ task.name }}</h3>
-          <p>
-            <span class="table-cluster" *ngIf="task.cluster">{{ task.cluster }}</span>
+          <p class="table-meta">
+            <span class="table-cluster" *ngIf="task.cluster?.name" [style.color]="task.cluster!.color">{{ task.cluster!.name }}</span>
+            <span class="table-section" *ngIf="task.section_name">{{ task.section_name }}</span>
             <span class="table-scope" *ngIf="task.scope_score">S{{ task.scope_score }}</span>
+            <span class="table-tipo" *ngIf="task.tipo">{{ task.tipo }}</span>
           </p>
         </ion-label>
         <app-phase-badge
