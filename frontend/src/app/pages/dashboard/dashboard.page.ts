@@ -201,6 +201,14 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
     await this.state.stopAgent(gid);
   }
 
+  async approveTask(gid: string): Promise<void> {
+    await this.state.answerQuestion(gid, 'Approve');
+  }
+
+  async rejectTask(gid: string): Promise<void> {
+    await this.state.answerQuestion(gid, 'Reject');
+  }
+
   async refresh(): Promise<void> {
     await this.state.refreshTasks();
     if (this.viewMode() === 'cards') {

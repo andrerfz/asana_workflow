@@ -172,6 +172,13 @@
   font-style: italic;
 }
 
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
 .cluster-group {
   margin-bottom: 8px;
 }

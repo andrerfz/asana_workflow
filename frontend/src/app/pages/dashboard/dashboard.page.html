@@ -167,7 +167,6 @@
     <ion-list lines="full" class="table-list">
       <ion-item
         *ngFor="let task of filteredTasks(); trackBy: trackByGid"
-        button
         detail="false"
         (click)="openTask(task.task_gid)">
         <ion-label>
@@ -179,11 +178,43 @@
             <span class="table-tipo" *ngIf="task.tipo">{{ task.tipo }}</span>
           </p>
         </ion-label>
-        <app-phase-badge
-          *ngIf="state.getRunForTask(task.task_gid)?.phase"
-          [phase]="state.getRunForTask(task.task_gid)!.phase"
-          slot="end">
-        </app-phase-badge>
+
+        <!-- Actions slot -->
+        <div slot="end" class="table-actions" (click)="$event.stopPropagation()">
+          <app-phase-badge
+            *ngIf="state.getRunForTask(task.task_gid)?.phase"
+            [phase]="state.getRunForTask(task.task_gid)!.phase"
+            size="sm">
+          </app-phase-badge>
+
+          <!-- Approve / Reject when waiting -->
+          <ng-container *ngIf="state.getRunForTask(task.task_gid)?.phase === 'awaiting_approval'">
+            <ion-button fill="clear" size="small" color="success" (click)="approveTask(task.task_gid)">
+              <ion-icon slot="icon-only" name="checkmark-outline"></ion-icon>
+            </ion-button>
+            <ion-button fill="clear" size="small" color="danger" (click)="rejectTask(task.task_gid)">
+              <ion-icon slot="icon-only" name="close-outline"></ion-icon>
+            </ion-button>
+          </ng-container>
+
+          <!-- Stop when running -->
+          <ion-button fill="clear" size="small" color="danger"
+            *ngIf="state.getRunForTask(task.task_gid)?.is_active"
+            (click)="stopAgent(task.task_gid)">
+            <ion-icon slot="icon-only" name="stop-circle-outline"></ion-icon>
+          </ion-button>
+
+          <!-- Run when idle -->
+          <ion-button fill="clear" size="small" color="primary"
+            *ngIf="!state.getRunForTask(task.task_gid)?.is_active"
+            (click)="startAgent(task.task_gid)">
+            <ion-icon slot="icon-only" name="play-circle-outline"></ion-icon>
+          </ion-button>
+
+          <ion-button fill="clear" size="small" color="medium" (click)="openTask(task.task_gid)">
+            <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
+          </ion-button>
+        </div>
       </ion-item>
       <ion-item *ngIf="filteredTasks().length === 0">
         <ion-label color="medium">No tasks found</ion-label>
