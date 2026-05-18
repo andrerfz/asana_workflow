@@ -1,0 +1,34 @@
+<ion-card class="task-card" [class.has-run]="hasRun" [class.needs-attention]="needsAttention" (click)="onOpen()">
+
+  <ion-card-header>
+    <div class="card-top">
+      <span class="cluster-tag" *ngIf="clusterMeta" [style.background]="clusterColor + '22'" [style.color]="clusterColor">
+        {{ clusterMeta.name }}
+      </span>
+      <span class="scope-tag" *ngIf="scopeLabel">{{ scopeLabel }}</span>
+    </div>
+    <ion-card-title class="task-name">{{ task.name }}</ion-card-title>
+  </ion-card-header>
+
+  <ion-card-content>
+    <div class="phase-row" *ngIf="phase">
+      <app-phase-badge [phase]="phase"></app-phase-badge>
+      <span class="last-log" *ngIf="lastLog && isRunning">{{ lastLog | slice:0:80 }}</span>
+    </div>
+
+    <div class="card-actions">
+      <ion-button fill="clear" size="small" color="primary" (click)="onStart($event)" *ngIf="!isRunning">
+        <ion-icon slot="start" name="play-circle-outline"></ion-icon>
+        Run
+      </ion-button>
+      <ion-button fill="clear" size="small" color="danger" (click)="onStop($event)" *ngIf="isRunning">
+        <ion-icon slot="start" name="stop-circle-outline"></ion-icon>
+        Stop
+      </ion-button>
+      <ion-button fill="clear" size="small" color="medium" (click)="onOpen()">
+        <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
+      </ion-button>
+    </div>
+  </ion-card-content>
+
+</ion-card>

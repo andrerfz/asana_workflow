@@ -16,6 +16,10 @@ from ...services.asana_client import fetch_subtasks
 log = logging.getLogger(__name__)
 
 
+class _QARateLimitError(Exception):
+    """Raised when QA produces empty output due to rate limit — caller should wait longer."""
+
+
 async def quality_checks(task_gid: str, run: dict) -> list[dict]:
     """Run quality checks on all repos."""
     checks = []
@@ -236,19 +240,19 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=cwd,
-            max_turns=8,
-            subprocess_timeout=600.0,  # 10 min hard cap — QA should finish in 2-3 min
-            allowed_tools=["Read", "Glob", "Grep", "Bash"],
+            max_turns=1,
+            subprocess_timeout=120.0,  # 2 min — no tools means single-turn response
+            allowed_tools=[],
             system_prompt=(
                 "You are a pragmatic QA reviewer. Your goal is to verify that the task requirements "
                 "are met and catch real bugs. You are NOT looking for perfection — you are checking "
                 "if the code solves the problem and doesn't break anything. "
                 "Only FAIL for things that would actually cause problems in production. "
                 "Commit format, code style, and minor warnings are NOT reasons to fail. "
-                "You may use Read, Glob, Grep, and Bash (read-only commands) to inspect the repo."
+                "The full diff is provided — review it directly without reading additional files."
             ),
             task_gid=task_gid,
-            model="sonnet",
+            model="haiku",
         )
 
         try:
@@ -295,6 +299,10 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
                         add_log(task_gid, f"Recovered {len(extracted)} chars from raw stream lines")
                         qa_text = extracted
             if not qa_text:
+                # If rate limit caused the empty result, signal caller to wait longer
+                if result.get("rate_limited"):
+                    add_log(task_gid, "QA empty due to rate limit — caller should wait before retrying", "warning")
+                    raise _QARateLimitError("QA rate limited before generating output")
                 return None
 
         if qa_text.startswith("{") and '"type"' in qa_text[:100]:

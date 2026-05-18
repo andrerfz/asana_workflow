@@ -1,4 +1,4 @@
-.PHONY: help build up down restart recreate logs shell clean dev setup setup-agent test
+.PHONY: help build up down restart recreate logs shell clean dev setup setup-agent test frontend frontend-dev electron-start
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -63,6 +63,21 @@ setup: ## First-time setup: copy .env, install deps, create data dir
 
 setup-agent: ## Generate Claude Code auth token and add it to .env
 	@./scripts/setup-agent.sh
+
+# --- Frontend ---
+
+frontend: ## Build Angular/Ionic frontend (outputs to app/static/)
+	cd frontend && npm run build
+	@echo ""
+	@echo "\033[1;32m  Frontend built → app/static/\033[0m"
+	@echo "\033[1;32m  Restart FastAPI to serve new build.\033[0m"
+	@echo ""
+
+frontend-dev: ## Dev server with HMR at :4200 (FastAPI must be running on :8765)
+	cd frontend && npm start
+
+electron-start: ## Run desktop app (FastAPI + Electron window)
+	cd electron && npm start
 
 # --- Tests ---
 

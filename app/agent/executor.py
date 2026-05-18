@@ -39,7 +39,7 @@ from .pipeline import (
     build_task_context, load_claude_md_guides, parse_additional_repos,
     agent_investigate, agent_plan, agent_code,
     rebase_from_default, agent_test, select_test_cmd,
-    agent_qa_review, quality_checks, agent_finalize,
+    agent_qa_review, quality_checks, agent_finalize, _QARateLimitError,
 )
 
 log = logging.getLogger(__name__)
@@ -643,6 +643,25 @@ async def _run_agent_resumed(task_gid: str, task: dict, feedback: str,
 
 # ─── Shared Coding → Testing → QA Loop ───
 
+
+async def _run_qa_with_retry(task_gid: str, task: dict, run: dict, quality: list) -> str | None:
+    """Run QA review with smart retry: 90s for generic failures, 5 min for rate-limit stalls."""
+    delays = [90, 300]  # first retry after 90s, second after 5 min
+    for attempt, delay in enumerate([-1] + delays):
+        if delay >= 0:
+            label = "5 min (rate limit)" if delay == 300 else "90s"
+            add_log(task_gid, f"QA review failed — retrying in {label}...", "warning")
+            await asyncio.sleep(delay)
+        try:
+            result = await agent_qa_review(task_gid, task, run, quality_results=quality)
+            if result is not None:
+                return result
+        except _QARateLimitError:
+            # Rate-limited before any output — force the long wait on next attempt
+            delays[min(attempt, len(delays) - 1)] = 300
+    return None
+
+
 async def _wait_for_answer(task_gid: str) -> str | None:
     """Poll for a human answer. Returns None if run is cancelled/missing."""
     while True:
@@ -773,15 +792,7 @@ async def _coding_test_qa_loop(task_gid: str, task: dict, task_context: str,
             add_log(task_gid, f"Quality: {passed}/{total} checks passed")
 
         # Phase: QA REVIEW — pass quality results so QA can reference them
-        qa_report = await agent_qa_review(task_gid, task, run, quality_results=quality)
-        if qa_report is None:
-            add_log(task_gid, "QA review failed to produce a report — retrying in 90s...", "warning")
-            await asyncio.sleep(90)
-            qa_report = await agent_qa_review(task_gid, task, run, quality_results=quality)
-        if qa_report is None:
-            add_log(task_gid, "QA review still failing — retrying in 90s...", "warning")
-            await asyncio.sleep(90)
-            qa_report = await agent_qa_review(task_gid, task, run, quality_results=quality)
+        qa_report = await _run_qa_with_retry(task_gid, task, run, quality)
         if not qa_report:
             add_log(task_gid, "QA review could not produce a report after retries — stopping", "error")
             update_phase(task_gid, AgentPhase.ERROR, error="QA review failed to produce a report")
@@ -904,15 +915,7 @@ async def trigger_manual_qa(task_gid: str, task: dict):
             current_run["quality_checks"] = quality
             save_agent_run(task_gid, current_run)
 
-            qa_report = await agent_qa_review(task_gid, task, current_run, quality_results=quality)
-            if qa_report is None:
-                add_log(task_gid, "QA review failed — retrying in 90s...", "warning")
-                await asyncio.sleep(90)
-                qa_report = await agent_qa_review(task_gid, task, current_run, quality_results=quality)
-            if qa_report is None:
-                add_log(task_gid, "QA review still failing — retrying in 90s...", "warning")
-                await asyncio.sleep(90)
-                qa_report = await agent_qa_review(task_gid, task, current_run, quality_results=quality)
+            qa_report = await _run_qa_with_retry(task_gid, task, current_run, quality)
             if not qa_report:
                 add_log(task_gid, "QA review could not produce a report", "error")
                 update_phase(task_gid, AgentPhase.ERROR, error="QA review failed to produce a report")
@@ -923,8 +926,14 @@ async def trigger_manual_qa(task_gid: str, task: dict):
             current_run = load_agent_run(task_gid)
             if not current_run.get("question"):
                 add_log(task_gid, "QA auto-approved")
+                await agent_finalize(task_gid, current_run)
                 update_phase(task_gid, AgentPhase.DONE)
                 await _broadcast_state(task_gid)
+                await _post_asana_comment(
+                    task_gid,
+                    f"🤖 Agent completed.\n\nBranches: {', '.join(r.get('branch', '?') for r in current_run.get('repos', []))}\n\nReview the changes and merge when ready.",
+                    dedup_prefix="🤖 Agent completed"
+                )
                 return
 
             # Wait for human QA decision
@@ -937,8 +946,14 @@ async def trigger_manual_qa(task_gid: str, task: dict):
                 current_run = load_agent_run(task_gid)
                 current_run["question"] = None
                 save_agent_run(task_gid, current_run)
+                await agent_finalize(task_gid, current_run)
                 update_phase(task_gid, AgentPhase.DONE)
                 await _broadcast_state(task_gid)
+                await _post_asana_comment(
+                    task_gid,
+                    f"🤖 Agent completed.\n\nBranches: {', '.join(r.get('branch', '?') for r in current_run.get('repos', []))}\n\nReview the changes and merge when ready.",
+                    dedup_prefix="🤖 Agent completed"
+                )
                 return
 
             # QA rejected — build context and enter shared coding→test→QA loop
@@ -998,8 +1013,8 @@ async def run_manual_tests(task_gid: str) -> dict:
             continue
         test_cmd = select_test_cmd(repo, repo_entry["worktree_path"])
         if not test_cmd:
-            add_log(task_gid, f"[{repo_entry['id']}] No test command configured", "warning")
-            results.append({"repo": repo_entry["id"], "passed": None, "message": "No test command"})
+            add_log(task_gid, f"[{repo_entry['id']}] Tests skipped (frontend-only changes or no test command)", "warning")
+            results.append({"repo": repo_entry["id"], "passed": None, "message": "Tests skipped"})
             continue
 
         test_cwd = repo["path"] if (repo.get("test_docker_cmd") and not repo.get("test_worktree_cmd") and not repo.get("test_worktree_cmd_fast")) else repo_entry["worktree_path"]

@@ -36,8 +36,10 @@ async def agent_plan(task_gid: str, context: str, run: dict) -> Optional[str]:
 
         system = (
             "You are a senior developer. Analyze the task and produce a concise implementation plan. "
-            "List the files you will modify, the approach, and any questions or risks. "
-            "Be specific about which repo and which files. Keep the plan under 500 words. "
+            "You MUST name the exact files to modify (e.g. app/Services/FooService.php, not just 'the service layer'). "
+            "If the investigation context identified specific files, use those exact paths. "
+            "If no specific files are identified, say so explicitly — do NOT guess or invent plausible-sounding paths. "
+            "Keep the plan under 500 words. "
             "Do NOT use any tools. Do NOT read or browse files. Just analyze the context provided and respond with the plan. "
             "Output ONLY the plan text, no markdown fences or extra formatting.\n\n"
             "IMPORTANT: NEVER include merge or rebase steps for other branches in your plan. "

@@ -1,0 +1,11 @@
+<div class="log-container" #logContainer>
+  <div *ngIf="!visibleLogs.length" class="log-empty">No logs yet</div>
+  <div
+    *ngFor="let entry of visibleLogs; trackBy: trackByTs"
+    class="log-entry"
+    [ngClass]="levelClass(entry.level)"
+  >
+    <span class="log-time">{{ formatTime(entry.timestamp) }}</span>
+    <span class="log-msg">{{ entry.message }}</span>
+  </div>
+</div>

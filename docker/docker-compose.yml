@@ -23,7 +23,7 @@ services:
       - ${PROJECTS_DIR}:${PROJECTS_DIR}
       # Claude Code CLI config — NOT read-only: CLI needs to write session/cache data
       - ~/.claude:/home/agent/.claude
-      - ~/.claude.json:/home/agent/.claude.json:ro
+      - ~/.claude.json:/run/host-claude.json:ro
       # SSH keys for git fetch/push over SSH
       - ~/.ssh:/home/agent/.ssh:ro
       # Docker socket — lets agent run tests inside project containers

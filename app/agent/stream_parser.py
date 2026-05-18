@@ -16,6 +16,14 @@ INFRA_ERROR_PATTERNS = [
     "Error: No such container",
     r"network .* not found",
     "Error response from daemon",
+    # External service / network failures — agent cannot fix these
+    "SOAP-ERROR: Parsing WSDL",
+    "Couldn't load from 'http",
+    "Couldn't load from \"http",
+    "Connection refused",
+    "Could not resolve host",
+    "Failed to connect to",
+    "cURL error",
 ]
 
 

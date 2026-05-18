@@ -1,0 +1,4 @@
+<span class="phase-badge" [class.sm]="size === 'sm'" [class.active]="isActive" [style.--badge-color]="color">
+  <span *ngIf="isActive" class="pulse-dot"></span>
+  {{ label }}
+</span>

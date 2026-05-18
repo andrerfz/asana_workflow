@@ -1,0 +1,91 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Agent Dashboard</ion-title>
+    <ion-buttons slot="end">
+      <ion-badge color="success" *ngIf="state.connected()">●</ion-badge>
+      <ion-badge color="danger" *ngIf="!state.connected()">○</ion-badge>
+      <ion-button (click)="refresh()" fill="clear">
+        <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
+      </ion-button>
+      <ion-button routerLink="/settings" fill="clear">
+        <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+
+  <!-- Stats bar -->
+  <div class="stats-bar">
+    <div class="stat" (click)="setPhase(null)">
+      <span class="stat-num">{{ stats().total }}</span>
+      <span class="stat-label">Tasks</span>
+    </div>
+    <div class="stat clickable" (click)="setPhase('all')">
+      <span class="stat-num accent-blue">{{ stats().active }}</span>
+      <span class="stat-label">Running</span>
+    </div>
+    <div class="stat clickable" [class.active]="filterPhase() === 'awaiting_approval'" (click)="setPhase('awaiting_approval')">
+      <span class="stat-num accent-yellow">{{ stats().needsApproval }}</span>
+      <span class="stat-label">Needs input</span>
+    </div>
+    <div class="stat clickable" [class.active]="filterPhase() === 'error'" (click)="setPhase('error')">
+      <span class="stat-num accent-red">{{ stats().errors }}</span>
+      <span class="stat-label">Errors</span>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <ion-searchbar
+    placeholder="Search tasks..."
+    (ionInput)="onSearch($event)"
+    animated>
+  </ion-searchbar>
+
+  <!-- Cluster filter chips -->
+  <div class="chip-row">
+    <ion-chip [color]="filterCluster() === null ? 'primary' : 'medium'" (click)="setCluster(null)">All</ion-chip>
+    <ion-chip
+      *ngFor="let c of clusters"
+      [style.--color]="c.color"
+      [class.selected-chip]="filterCluster() === c.id"
+      (click)="setCluster(filterCluster() === c.id ? null : c.id)">
+      {{ c.name }}
+    </ion-chip>
+  </div>
+
+  <!-- Sort -->
+  <div class="sort-row">
+    <span class="sort-label">Sort:</span>
+    <ion-segment [value]="sortField()" (ionChange)="setSort($any($event.detail.value))">
+      <ion-segment-button value="priority">Priority</ion-segment-button>
+      <ion-segment-button value="name">Name</ion-segment-button>
+      <ion-segment-button value="scope">Scope</ion-segment-button>
+    </ion-segment>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="state.loading()" class="loading-state">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Loading tasks...</p>
+  </div>
+
+  <!-- Task grid -->
+  <div class="task-grid" *ngIf="!state.loading()">
+    <app-task-card
+      *ngFor="let task of filteredTasks(); trackBy: trackByGid"
+      [task]="task"
+      [run]="state.getRunForTask(task.task_gid)"
+      (openDetail)="openTask($event)"
+      (startAgent)="startAgent($event)"
+      (stopAgent)="stopAgent($event)">
+    </app-task-card>
+
+    <div *ngIf="filteredTasks().length === 0" class="empty-state">
+      <ion-icon name="albums-outline" size="large"></ion-icon>
+      <p>No tasks match the current filters</p>
+    </div>
+  </div>
+
+</ion-content>

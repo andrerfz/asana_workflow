@@ -41,4 +41,7 @@ RUN git config --global user.name "Asana Agent" && \
 
 EXPOSE 8765
 
+COPY --chmod=755 docker/entrypoint.sh /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8765", "--reload", "--reload-dir", "/app"]

@@ -1,0 +1,129 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/"></ion-back-button>
+    </ion-buttons>
+    <ion-title>{{ task()?.name || 'Task' }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button fill="clear" color="success" (click)="start()" *ngIf="run() && !run()?.is_active && run()?.phase !== 'done'">
+        <ion-icon slot="icon-only" name="play-outline"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" color="danger" (click)="stop()" *ngIf="run()?.is_active">
+        <ion-icon slot="icon-only" name="stop-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <!-- Phase badge in sub-toolbar -->
+  <ion-toolbar *ngIf="run()">
+    <div class="phase-strip">
+      <app-phase-badge [phase]="run()!.phase"></app-phase-badge>
+      <span class="cost" *ngIf="run()?.cost_usd">${{ run()!.cost_usd!.toFixed(4) }}</span>
+    </div>
+  </ion-toolbar>
+
+  <!-- Attention banner for awaiting_approval / error -->
+  <ion-toolbar color="warning" *ngIf="run()?.phase === 'awaiting_approval' && needsAnswer()">
+    <ion-title>Review required</ion-title>
+  </ion-toolbar>
+  <ion-toolbar color="danger" *ngIf="run()?.phase === 'error'">
+    <ion-title>{{ run()?.error || 'Agent error' }}</ion-title>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <ion-segment [value]="activeSegment()" (ionChange)="setSegment($any($event.detail.value))">
+      <ion-segment-button value="logs">Logs</ion-segment-button>
+      <ion-segment-button value="plan">Plan</ion-segment-button>
+      <ion-segment-button value="qa">QA</ion-segment-button>
+      <ion-segment-button value="console">Console</ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+
+  <!-- No agent run yet -->
+  <div *ngIf="!run()" class="empty-run">
+    <ion-icon name="play-circle-outline" size="large" color="medium"></ion-icon>
+    <p>No agent run for this task yet.</p>
+    <ion-button (click)="start()">Start Agent</ion-button>
+  </div>
+
+  <!-- QA question / plan approval -->
+  <ion-card color="warning" *ngIf="needsAnswer() && run()?.question?.type === 'qa_review'" class="attention-card">
+    <ion-card-header>
+      <ion-card-title>QA Review — Action Required</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <pre class="qa-text">{{ run()?.question?.text }}</pre>
+      <div class="answer-actions">
+        <ion-button color="success" (click)="approve()">Approve</ion-button>
+        <ion-button color="danger" fill="outline" (click)="reject()">Reject</ion-button>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card color="primary" *ngIf="needsAnswer() && run()?.question?.type !== 'qa_review'" class="attention-card">
+    <ion-card-header>
+      <ion-card-title>Plan Review</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <pre class="plan-text">{{ run()?.question?.plan || run()?.question?.text }}</pre>
+      <div class="answer-actions">
+        <ion-button color="success" (click)="approve()">Approve Plan</ion-button>
+        <ion-button color="medium" fill="outline" (click)="reject()">Reject</ion-button>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Error resume -->
+  <ion-card color="danger" *ngIf="run()?.phase === 'error'" class="attention-card">
+    <ion-card-content>
+      <ion-button color="light" fill="outline" (click)="resume()">Resume Agent</ion-button>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- LOGS segment -->
+  <div class="log-panel" *ngIf="activeSegment() === 'logs' && run()">
+    <app-log-stream [logs]="run()!.logs"></app-log-stream>
+  </div>
+
+  <!-- PLAN segment -->
+  <div class="text-panel" *ngIf="activeSegment() === 'plan'">
+    <pre *ngIf="run()?.plan" class="plan-text">{{ run()!.plan }}</pre>
+    <p *ngIf="!run()?.plan" class="no-content">No plan generated yet</p>
+  </div>
+
+  <!-- QA segment -->
+  <div class="text-panel" *ngIf="activeSegment() === 'qa'">
+    <pre *ngIf="run()?.qa_report" class="qa-text">{{ run()!.qa_report }}</pre>
+    <p *ngIf="!run()?.qa_report" class="no-content">No QA report yet</p>
+  </div>
+
+  <!-- CONSOLE segment (live guide) -->
+  <div class="console-panel" *ngIf="activeSegment() === 'console'">
+    <div class="conversation" *ngIf="run()?.conversation?.length">
+      <div
+        *ngFor="let msg of run()!.conversation; trackBy: trackByTs"
+        class="msg"
+        [class.user]="msg.role === 'user'"
+        [class.agent]="msg.role === 'agent'">
+        <span class="msg-role">{{ msg.role }}</span>
+        <span class="msg-text">{{ msg.text }}</span>
+      </div>
+    </div>
+    <div class="guide-input">
+      <ion-textarea
+        placeholder="Send message to agent..."
+        [value]="guideMessage()"
+        (ionInput)="onGuideInput($event)"
+        rows="2"
+        autoGrow>
+      </ion-textarea>
+      <ion-button (click)="sendGuide()" [disabled]="sending() || !guideMessage().trim()">
+        <ion-icon slot="icon-only" name="send-outline"></ion-icon>
+      </ion-button>
+    </div>
+  </div>
+
+</ion-content>

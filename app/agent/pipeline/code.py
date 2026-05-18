@@ -94,7 +94,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=wt_path,
-            max_turns=30,
+            max_turns=20,
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill(db-query)"],
             system_prompt=system,
             task_gid=task_gid,

@@ -121,27 +121,20 @@ async def open_in_ide(body: dict):
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-def _file_version(filename: str) -> int:
-    """Return file mtime as cache-busting version."""
-    try:
-        return int((STATIC_DIR / filename).stat().st_mtime)
-    except OSError:
-        return 0
-
 
 @app.get("/")
 async def index():
-    import re
-    html = (STATIC_DIR / "index.html").read_text()
-    def _add_version(m):
-        attr, filename = m.group(1), m.group(2)
-        return f'{attr}="/static/{filename}?v={_file_version(filename)}"'
-    html = re.sub(
-        r'((?:src|href))="/static/([^"]+)"',
-        _add_version,
-        html,
-    )
-    return HTMLResponse(html)
+    return HTMLResponse((STATIC_DIR / "index.html").read_text())
+
+
+@app.get("/{full_path:path}")
+async def spa_fallback(full_path: str):
+    """Serve Angular index.html for all non-API routes (SPA client-side routing)."""
+    index = STATIC_DIR / "index.html"
+    if not index.exists():
+        from fastapi import HTTPException
+        raise HTTPException(404, "Frontend not built — run: cd frontend && npm run build")
+    return HTMLResponse(index.read_text())
 
 
 @app.websocket("/ws/agent")

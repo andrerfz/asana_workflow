@@ -1,0 +1,54 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Settings</ion-title>
+    <ion-buttons slot="end">
+      <ion-button fill="clear" (click)="saveSettings()">Save</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment [value]="activeTab()" (ionChange)="setTab($any($event.detail.value))">
+      <ion-segment-button value="repos">Repositories</ion-segment-button>
+      <ion-segment-button value="workflow">Workflow</ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-list *ngIf="activeTab() === 'repos'">
+    <ion-list-header>Configured Repositories</ion-list-header>
+    <ion-item *ngIf="loading()">
+      <ion-spinner slot="start" name="crescent"></ion-spinner>
+      <ion-label>Loading...</ion-label>
+    </ion-item>
+    <ion-item *ngFor="let repo of repos()" detail>
+      <ion-label>
+        <h3>{{ repo.name || repo.id }}</h3>
+        <p>{{ repo.path }}</p>
+        <p *ngIf="repo.test_cmd" class="mono">{{ repo.test_cmd }}</p>
+      </ion-label>
+    </ion-item>
+    <ion-item *ngIf="!loading() && repos().length === 0">
+      <ion-label color="medium">No repositories configured</ion-label>
+    </ion-item>
+  </ion-list>
+
+  <ion-list *ngIf="activeTab() === 'workflow'">
+    <ion-list-header>Agent Workflow</ion-list-header>
+    <ion-item>
+      <ion-label>Max concurrent agents</ion-label>
+      <ion-select [value]="settings().max_concurrent_agents" (ionChange)="onMaxConcurrent($event)" slot="end">
+        <ion-select-option [value]="1">1</ion-select-option>
+        <ion-select-option [value]="2">2</ion-select-option>
+        <ion-select-option [value]="3">3</ion-select-option>
+        <ion-select-option [value]="4">4</ion-select-option>
+      </ion-select>
+    </ion-item>
+    <ion-item>
+      <ion-label>Auto-approve plans</ion-label>
+      <ion-toggle [checked]="settings().auto_approve_plan" (ionChange)="onAutoApprove($event)" slot="end"></ion-toggle>
+    </ion-item>
+  </ion-list>
+</ion-content>

@@ -1,0 +1,31 @@
+{
+  "name": "asana-workflow-desktop",
+  "version": "1.0.0",
+  "description": "Asana Workflow Agent Desktop",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.yurest.asana-workflow",
+    "productName": "Asana Workflow",
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg", "zip"]
+    },
+    "files": [
+      "main.js",
+      "node_modules/**"
+    ],
+    "extraResources": [
+      { "from": "../app", "to": "app" },
+      { "from": "../requirements.txt", "to": "requirements.txt" }
+    ]
+  }
+}

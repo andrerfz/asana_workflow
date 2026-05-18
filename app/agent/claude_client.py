@@ -149,7 +149,7 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
         *cmd,
         cwd=cwd,
         env=cli_env,
-        stdin=asyncio.subprocess.PIPE if use_stdin else None,
+        stdin=asyncio.subprocess.PIPE if use_stdin else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         limit=10 * 1024 * 1024,  # 10MB line buffer (stream-json can emit large lines)
@@ -266,7 +266,8 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
             except asyncio.TimeoutError:
                 timed_out = True
                 if task_gid:
-                    add_log(task_gid, f"[claude] Subprocess timeout after {int(subprocess_timeout)}s — killing process", "warning")
+                    stderr_so_far = "".join(stderr_chunks)[:500]
+                    add_log(task_gid, f"[claude] Subprocess timeout after {int(subprocess_timeout)}s — killing process. stderr={stderr_so_far!r}", "warning")
                 process.kill()
         else:
             await streams

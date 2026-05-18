@@ -17,8 +17,8 @@ from .investigate import agent_investigate
 from .plan import agent_plan
 from .code import agent_code, auto_commit_if_dirty
 from .rebase import rebase_from_default
-from .test import agent_test, run_test_with_progress, select_test_cmd, has_migration_files
-from .qa import agent_qa_review, quality_checks
+from .test import agent_test, run_test_with_progress, select_test_cmd, has_migration_files, has_backend_files
+from .qa import agent_qa_review, quality_checks, _QARateLimitError
 from .finalize import agent_finalize
 
 __all__ = [
@@ -28,7 +28,7 @@ __all__ = [
     "agent_plan",
     "agent_code", "auto_commit_if_dirty",
     "rebase_from_default",
-    "agent_test", "run_test_with_progress", "select_test_cmd", "has_migration_files",
+    "agent_test", "run_test_with_progress", "select_test_cmd", "has_migration_files", "has_backend_files",
     "agent_qa_review", "quality_checks",
     "agent_finalize",
 ]

@@ -95,6 +95,7 @@ async def agent_finalize(task_gid: str, run: dict) -> bool:
             prompt=prompt,
             cwd=wt_path,
             max_turns=10,
+            subprocess_timeout=300.0,  # 5 min — squash + lint should never take longer
             allowed_tools=["Bash", "Read", "Glob"],
             system_prompt=(
                 "You are finalizing a branch for delivery. Your ONLY job is to: "

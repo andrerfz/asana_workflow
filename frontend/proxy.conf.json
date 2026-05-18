@@ -1,0 +1,9 @@
+{
+  "/tasks": { "target": "http://localhost:8765", "secure": false },
+  "/agent": { "target": "http://localhost:8765", "secure": false },
+  "/repos": { "target": "http://localhost:8765", "secure": false },
+  "/ai":    { "target": "http://localhost:8765", "secure": false },
+  "/api":   { "target": "http://localhost:8765", "secure": false },
+  "/clusters": { "target": "http://localhost:8765", "secure": false },
+  "/ws":    { "target": "ws://localhost:8765", "secure": false, "ws": true }
+}

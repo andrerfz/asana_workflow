@@ -35,13 +35,41 @@ def has_migration_files(wt_path: str) -> bool:
         return True  # assume yes on error
 
 
+_BACKEND_PATTERNS = (".php", ".env", "migration", "routes/", "config/", "composer.")
+
+
+def has_backend_files(wt_path: str, default_branch: str = "master") -> bool:
+    """True if any committed file could affect backend behaviour."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", f"origin/{default_branch}...HEAD"],
+            cwd=wt_path, capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return True  # assume yes on error
+        files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+        return any(
+            any(p in f.lower() for p in _BACKEND_PATTERNS)
+            for f in files
+        )
+    except Exception:
+        return True  # assume yes on error
+
+
 def select_test_cmd(repo: dict, wt_path: str) -> Optional[str]:
     """Pick the best test command: fast (no-migration) when safe, full otherwise."""
-    fast_cmd = repo.get("test_worktree_cmd_fast")
+    default_branch = repo.get("default_branch", "master")
     full_cmd = repo.get("test_worktree_cmd") or repo.get("test_docker_cmd") or repo.get("test_cmd")
+
+    if not has_backend_files(wt_path, default_branch):
+        log.info("Frontend-only changes detected — skipping backend tests")
+        return None
+
+    fast_cmd = repo.get("test_worktree_cmd_fast")
     if fast_cmd and not has_migration_files(wt_path):
         log.info("No migration files detected — using fast test command: %s", fast_cmd)
         return fast_cmd
+
     return full_cmd
 
 
@@ -221,7 +249,8 @@ async def _agent_fix_tests(task_gid: str, repo_entry: dict, error_output: str) -
         result = await _run_claude_cli(
             prompt=prompt,
             cwd=repo_entry["worktree_path"],
-            max_turns=10,
+            max_turns=8,
+            subprocess_timeout=300.0,  # 5 min cap — prevents rate-limit waiting from blocking hours
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
             system_prompt=f"You are fixing failing tests. Read the error output, identify the issue, and fix it. Make minimal changes. {BASH_BLOCKLIST} NEVER modify Makefile, Dockerfile, docker-compose.yml, or any infrastructure/config files. Only fix application code and tests.",
             task_gid=task_gid,
