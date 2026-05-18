@@ -56,13 +56,14 @@ def get_repo(repo_id: str) -> Optional[dict]:
     return repo
 
 
-def list_repos() -> list[dict]:
-    """List all configured repos with health status."""
+def list_repos(include_health: bool = False) -> list[dict]:
+    """List all configured repos. Health check is opt-in — it runs git per repo."""
     data = load_repos()
     result = []
     for repo_id, repo in data["repos"].items():
         entry = {**repo, "id": repo_id}
-        entry["health"] = check_repo_health(repo["path"])
+        if include_health:
+            entry["health"] = check_repo_health(repo["path"])
         result.append(entry)
     return result
 
