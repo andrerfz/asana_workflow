@@ -4,51 +4,309 @@
       <ion-back-button defaultHref="/"></ion-back-button>
     </ion-buttons>
     <ion-title>Settings</ion-title>
-    <ion-buttons slot="end">
-      <ion-button fill="clear" (click)="saveSettings()">Save</ion-button>
-    </ion-buttons>
   </ion-toolbar>
   <ion-toolbar>
     <ion-segment [value]="activeTab()" (ionChange)="setTab($any($event.detail.value))">
-      <ion-segment-button value="repos">Repositories</ion-segment-button>
+      <ion-segment-button value="repos">Repos</ion-segment-button>
+      <ion-segment-button value="ide">IDE</ion-segment-button>
+      <ion-segment-button value="mapping">Mapping</ion-segment-button>
+      <ion-segment-button value="agent">Agent</ion-segment-button>
+      <ion-segment-button value="guides">Guides</ion-segment-button>
       <ion-segment-button value="workflow">Workflow</ion-segment-button>
     </ion-segment>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <ion-list *ngIf="activeTab() === 'repos'">
-    <ion-list-header>Configured Repositories</ion-list-header>
-    <ion-item *ngIf="loading()">
-      <ion-spinner slot="start" name="crescent"></ion-spinner>
-      <ion-label>Loading...</ion-label>
-    </ion-item>
-    <ion-item *ngFor="let repo of repos()" detail>
-      <ion-label>
-        <h3>{{ repo.name || repo.id }}</h3>
-        <p>{{ repo.path }}</p>
-        <p *ngIf="repo.test_cmd" class="mono">{{ repo.test_cmd }}</p>
-      </ion-label>
-    </ion-item>
-    <ion-item *ngIf="!loading() && repos().length === 0">
-      <ion-label color="medium">No repositories configured</ion-label>
-    </ion-item>
-  </ion-list>
+  <div *ngIf="loading()" class="loading-wrap">
+    <ion-spinner name="crescent"></ion-spinner>
+  </div>
 
-  <ion-list *ngIf="activeTab() === 'workflow'">
-    <ion-list-header>Agent Workflow</ion-list-header>
-    <ion-item>
-      <ion-label>Max concurrent agents</ion-label>
-      <ion-select [value]="settings().max_concurrent_agents" (ionChange)="onMaxConcurrent($event)" slot="end">
-        <ion-select-option [value]="1">1</ion-select-option>
-        <ion-select-option [value]="2">2</ion-select-option>
-        <ion-select-option [value]="3">3</ion-select-option>
-        <ion-select-option [value]="4">4</ion-select-option>
-      </ion-select>
-    </ion-item>
-    <ion-item>
-      <ion-label>Auto-approve plans</ion-label>
-      <ion-toggle [checked]="settings().auto_approve_plan" (ionChange)="onAutoApprove($event)" slot="end"></ion-toggle>
-    </ion-item>
-  </ion-list>
+  <!-- ========== REPOS TAB ========== -->
+  <ng-container *ngIf="activeTab() === 'repos' && !loading()">
+    <div class="section-header">
+      <p class="projects-dir" *ngIf="projectsDir()">Projects dir: <code>{{ projectsDir() }}</code></p>
+      <div class="header-actions">
+        <ion-button size="small" fill="outline" [disabled]="scanLoading()" (click)="scanRepos()">
+          <ion-icon slot="start" name="scan-outline"></ion-icon>
+          {{ scanLoading() ? 'Scanning...' : 'Scan repos' }}
+        </ion-button>
+        <ion-button size="small" fill="solid" color="primary" (click)="toggleAddForm()">
+          <ion-icon slot="start" name="add-outline"></ion-icon>
+          Add repo
+        </ion-button>
+      </div>
+    </div>
+
+    <!-- Scan results -->
+    <ion-list *ngIf="scannedRepos().length > 0" class="scanned-list">
+      <ion-list-header>Found {{ scannedRepos().length }} new repos</ion-list-header>
+      <ion-item *ngFor="let r of scannedRepos()">
+        <ion-label>
+          <h3>{{ r.name || r.id }}</h3>
+          <p>{{ r.path }}</p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
+
+    <!-- Add form -->
+    <ion-card *ngIf="showAddForm()" class="add-repo-card">
+      <ion-card-header>
+        <ion-card-title>Add Repository</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-item>
+          <ion-label position="stacked">ID *</ion-label>
+          <ion-input [value]="newRepo().id" (ionInput)="onNewRepoField('id', $any($event.detail.value))"></ion-input>
+        </ion-item>
+        <ion-item>
+          <ion-label position="stacked">Path *</ion-label>
+          <ion-input [value]="newRepo().path" (ionInput)="onNewRepoField('path', $any($event.detail.value))"></ion-input>
+        </ion-item>
+        <ion-item>
+          <ion-label position="stacked">Test command</ion-label>
+          <ion-input [value]="newRepo().test_cmd" (ionInput)="onNewRepoField('test_cmd', $any($event.detail.value))"></ion-input>
+        </ion-item>
+        <ion-item>
+          <ion-label position="stacked">Lint command</ion-label>
+          <ion-input [value]="newRepo().lint_cmd" (ionInput)="onNewRepoField('lint_cmd', $any($event.detail.value))"></ion-input>
+        </ion-item>
+        <div class="form-actions">
+          <ion-button fill="outline" color="medium" (click)="toggleAddForm()">Cancel</ion-button>
+          <ion-button [disabled]="!newRepo().id || !newRepo().path || savingRepo() === 'new'" (click)="saveNewRepo()">
+            {{ savingRepo() === 'new' ? 'Saving...' : 'Save' }}
+          </ion-button>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Repo list -->
+    <div class="repo-cards">
+      <ion-card *ngFor="let repo of repos(); trackBy: trackById" class="repo-card">
+
+        <!-- View mode -->
+        <ng-container *ngIf="editingRepo()?.id !== repo.id">
+          <ion-card-header>
+            <div class="repo-card-title-row">
+              <div>
+                <ion-card-title>{{ repo.name || repo.id }}</ion-card-title>
+                <ion-card-subtitle class="mono">{{ repo.path }}</ion-card-subtitle>
+              </div>
+              <div class="repo-status-dot"></div>
+            </div>
+          </ion-card-header>
+          <ion-card-content>
+            <p *ngIf="repo.test_cmd" class="mono small">test: {{ repo.test_cmd }}</p>
+            <p *ngIf="repo.lint_cmd" class="mono small">lint: {{ repo.lint_cmd }}</p>
+            <div class="card-btn-row">
+              <ion-button size="small" fill="outline" (click)="startEdit(repo)">
+                <ion-icon slot="start" name="pencil-outline"></ion-icon>
+                Edit
+              </ion-button>
+              <ion-button size="small" fill="outline" color="danger" (click)="deleteRepo(repo.id)">
+                <ion-icon slot="start" name="trash-outline"></ion-icon>
+                Delete
+              </ion-button>
+            </div>
+          </ion-card-content>
+        </ng-container>
+
+        <!-- Edit mode -->
+        <ng-container *ngIf="editingRepo()?.id === repo.id">
+          <ion-card-header><ion-card-title>Edit {{ repo.id }}</ion-card-title></ion-card-header>
+          <ion-card-content>
+            <ion-item>
+              <ion-label position="stacked">Path</ion-label>
+              <ion-input [value]="editingRepo()?.path" (ionInput)="onEditRepoField('path', $any($event.detail.value))"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">Test command</ion-label>
+              <ion-input [value]="editingRepo()?.test_cmd" (ionInput)="onEditRepoField('test_cmd', $any($event.detail.value))"></ion-input>
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">Lint command</ion-label>
+              <ion-input [value]="editingRepo()?.lint_cmd" (ionInput)="onEditRepoField('lint_cmd', $any($event.detail.value))"></ion-input>
+            </ion-item>
+            <div class="form-actions">
+              <ion-button fill="outline" color="medium" (click)="editingRepo.set(null)">Cancel</ion-button>
+              <ion-button [disabled]="savingRepo() === repo.id" (click)="saveEditRepo()">
+                {{ savingRepo() === repo.id ? 'Saving...' : 'Save' }}
+              </ion-button>
+            </div>
+          </ion-card-content>
+        </ng-container>
+
+      </ion-card>
+
+      <div *ngIf="repos().length === 0" class="empty-tab">
+        <ion-icon name="folder-open-outline" size="large" color="medium"></ion-icon>
+        <p>No repositories configured</p>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ========== IDE TAB ========== -->
+  <ng-container *ngIf="activeTab() === 'ide'">
+    <ion-list>
+      <ion-list-header>IDE Selection</ion-list-header>
+      <ion-radio-group [value]="selectedIde()" (ionChange)="selectIde($event.detail.value)">
+        <ion-item *ngFor="let ide of ideOptions; trackBy: trackByIdx">
+          <ion-radio slot="start" [value]="ide.value"></ion-radio>
+          <ion-label>{{ ide.label }}</ion-label>
+        </ion-item>
+      </ion-radio-group>
+    </ion-list>
+    <ion-list>
+      <ion-list-header>Custom IDE Path</ion-list-header>
+      <ion-item>
+        <ion-label position="stacked">CLI path (leave empty if using standard IDE)</ion-label>
+        <ion-input
+          [value]="customIdePath()"
+          placeholder="/usr/local/bin/custom-ide"
+          (ionInput)="onCustomPath($event)">
+        </ion-input>
+      </ion-item>
+    </ion-list>
+  </ng-container>
+
+  <!-- ========== MAPPING TAB ========== -->
+  <ng-container *ngIf="activeTab() === 'mapping'">
+    <div *ngIf="areaMap().length === 0" class="empty-tab">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+    <div class="mapping-list">
+      <ion-card *ngFor="let entry of areaMap(); trackBy: trackByArea" class="mapping-card">
+        <ion-card-header>
+          <ion-card-title class="area-title">{{ entry.area }}</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-item>
+            <ion-select
+              multiple="true"
+              label="Repos"
+              labelPlacement="stacked"
+              [value]="entry.repoIds"
+              (ionChange)="onAreaRepoChange(entry.area, $event)">
+              <ion-select-option *ngFor="let repo of repos()" [value]="repo.id">
+                {{ repo.name || repo.id }}
+              </ion-select-option>
+            </ion-select>
+          </ion-item>
+          <ion-button
+            expand="block"
+            size="small"
+            fill="outline"
+            class="save-area-btn"
+            [disabled]="savingArea() === entry.area"
+            (click)="saveAreaMapping(entry.area, entry.repoIds)">
+            {{ savingArea() === entry.area ? 'Saving...' : 'Save' }}
+          </ion-button>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </ng-container>
+
+  <!-- ========== AGENT TAB ========== -->
+  <ng-container *ngIf="activeTab() === 'agent'">
+    <!-- CLI Status -->
+    <ion-card class="cli-status-card" *ngIf="cliStatus()">
+      <ion-card-header><ion-card-title>Claude CLI Status</ion-card-title></ion-card-header>
+      <ion-card-content>
+        <ion-item lines="none">
+          <ion-icon slot="start"
+            [name]="cliStatus()!.available ? 'checkmark-circle-outline' : 'close-circle-outline'"
+            [color]="cliStatus()!.available ? 'success' : 'danger'">
+          </ion-icon>
+          <ion-label>
+            <h3>{{ cliStatus()!.available ? 'Available' : 'Not available' }}</h3>
+            <p *ngIf="cliStatus()!.path">Path: {{ cliStatus()!.path }}</p>
+            <p *ngIf="cliStatus()!.version">Version: {{ cliStatus()!.version }}</p>
+            <p *ngIf="cliStatus()!.error" class="error-text">{{ cliStatus()!.error }}</p>
+          </ion-label>
+        </ion-item>
+        <ion-item lines="none">
+          <ion-icon slot="start"
+            [name]="cliStatus()!.authenticated ? 'key-outline' : 'lock-closed-outline'"
+            [color]="cliStatus()!.authenticated ? 'success' : 'danger'">
+          </ion-icon>
+          <ion-label>
+            {{ cliStatus()!.authenticated ? 'Authenticated' : 'Not authenticated' }}
+          </ion-label>
+        </ion-item>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Agent Settings -->
+    <ion-list>
+      <ion-list-header>Agent Configuration</ion-list-header>
+      <ion-item>
+        <ion-label>Max concurrent agents</ion-label>
+        <ion-select [value]="settings().max_concurrent_agents" (ionChange)="onMaxConcurrent($event)" slot="end">
+          <ion-select-option [value]="1">1</ion-select-option>
+          <ion-select-option [value]="2">2</ion-select-option>
+          <ion-select-option [value]="3">3</ion-select-option>
+          <ion-select-option [value]="4">4</ion-select-option>
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-label>Auto-approve plans</ion-label>
+        <ion-toggle [checked]="settings().auto_approve_plan" (ionChange)="onAutoApprove($event)" slot="end"></ion-toggle>
+      </ion-item>
+    </ion-list>
+    <div class="save-row">
+      <ion-button expand="block" [disabled]="savingSettings()" (click)="saveSettings()">
+        {{ savingSettings() ? 'Saving...' : 'Save Settings' }}
+      </ion-button>
+    </div>
+  </ng-container>
+
+  <!-- ========== GUIDES TAB ========== -->
+  <ng-container *ngIf="activeTab() === 'guides'">
+    <div *ngIf="guides().length === 0" class="empty-tab">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+    <div class="guides-list">
+      <ion-card *ngFor="let guide of guides(); trackBy: trackById" class="guide-card">
+        <ion-card-header>
+          <div class="guide-header-row">
+            <ion-card-title>{{ guide.label }}</ion-card-title>
+            <ion-badge color="primary">{{ guide.type }}</ion-badge>
+          </div>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-textarea
+            class="guide-textarea"
+            [value]="guide.content"
+            (ionInput)="onGuideContent(guide.id, $event)"
+            autoGrow
+            rows="8">
+          </ion-textarea>
+          <ion-button
+            expand="block"
+            size="small"
+            fill="outline"
+            [disabled]="savingGuide() === guide.id"
+            (click)="saveGuide(guide)">
+            {{ savingGuide() === guide.id ? 'Saving...' : 'Save guide' }}
+          </ion-button>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </ng-container>
+
+  <!-- ========== WORKFLOW TAB ========== -->
+  <ng-container *ngIf="activeTab() === 'workflow'">
+    <div *ngIf="!workflow()" class="empty-tab">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+    <div *ngIf="workflow()" class="workflow-view">
+      <ion-card>
+        <ion-card-header><ion-card-title>Pipeline Phases</ion-card-title></ion-card-header>
+        <ion-card-content>
+          <pre class="workflow-pre">{{ workflowJson() }}</pre>
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </ng-container>
+
 </ion-content>

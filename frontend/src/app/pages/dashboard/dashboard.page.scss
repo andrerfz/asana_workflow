@@ -92,3 +92,71 @@
   gap: 12px;
   font-size: 14px;
 }
+
+.chip-label {
+  font-size: 11px;
+  color: var(--ion-color-medium);
+  white-space: nowrap;
+  align-self: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.chart-section {
+  margin: 8px 16px;
+  height: 160px;
+  background: var(--ion-card-background);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+
+.cluster-chart {
+  width: 100%;
+  height: 100%;
+}
+
+.table-list {
+  margin: 0;
+}
+
+.table-task-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.table-cluster {
+  font-size: 11px;
+  color: var(--ion-color-primary);
+  margin-right: 6px;
+}
+
+.table-scope {
+  font-size: 11px;
+  color: var(--ion-color-medium);
+}
+
+.cluster-group {
+  margin-bottom: 8px;
+}
+
+.cluster-header-card {
+  margin: 12px 16px 6px;
+  border-left: 4px solid var(--ion-color-primary);
+
+  ion-card-header { padding: 10px 16px; }
+  ion-card-title { font-size: 15px; }
+  ion-card-subtitle { font-size: 11px; }
+}
+
+.cluster-tasks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  padding: 0 16px 8px;
+}
+
+.agents-list, .history-list {
+  margin: 0;
+}

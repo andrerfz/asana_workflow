@@ -4,13 +4,48 @@
     <ion-buttons slot="end">
       <ion-badge color="success" *ngIf="state.connected()">●</ion-badge>
       <ion-badge color="danger" *ngIf="!state.connected()">○</ion-badge>
-      <ion-button (click)="refresh()" fill="clear">
+      <ion-button (click)="refresh()" fill="clear" [disabled]="state.loading()">
         <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="sync()" fill="clear" [disabled]="syncing()">
+        <ion-icon slot="icon-only" name="cloud-download-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="classifyAll()" fill="clear" [disabled]="classifying()">
+        <ion-icon slot="icon-only" name="sparkles-outline"></ion-icon>
       </ion-button>
       <ion-button routerLink="/settings" fill="clear">
         <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
       </ion-button>
+      <ion-button routerLink="/history" fill="clear">
+        <ion-icon slot="icon-only" name="time-outline"></ion-icon>
+      </ion-button>
     </ion-buttons>
+  </ion-toolbar>
+
+  <!-- View mode tabs -->
+  <ion-toolbar>
+    <ion-segment [value]="viewMode()" (ionChange)="setViewMode($any($event.detail.value))">
+      <ion-segment-button value="cards">
+        <ion-icon name="grid-outline"></ion-icon>
+        Cards
+      </ion-segment-button>
+      <ion-segment-button value="table">
+        <ion-icon name="list-outline"></ion-icon>
+        Table
+      </ion-segment-button>
+      <ion-segment-button value="cluster">
+        <ion-icon name="layers-outline"></ion-icon>
+        Cluster
+      </ion-segment-button>
+      <ion-segment-button value="agents">
+        <ion-icon name="hardware-chip-outline"></ion-icon>
+        Agents
+      </ion-segment-button>
+      <ion-segment-button value="history">
+        <ion-icon name="time-outline"></ion-icon>
+        History
+      </ion-segment-button>
+    </ion-segment>
   </ion-toolbar>
 </ion-header>
 
@@ -43,20 +78,32 @@
     animated>
   </ion-searchbar>
 
+  <!-- Type filter pills -->
+  <div class="chip-row" *ngIf="viewMode() !== 'history'">
+    <span class="chip-label">Type:</span>
+    <ion-chip [color]="filterType() === null ? 'primary' : 'medium'" (click)="setType(null)">All</ion-chip>
+    <ion-chip
+      *ngFor="let t of typeOptions"
+      [color]="filterType() === t ? 'primary' : 'medium'"
+      (click)="setType(t)">
+      {{ t }}
+    </ion-chip>
+  </div>
+
   <!-- Cluster filter chips -->
-  <div class="chip-row">
+  <div class="chip-row" *ngIf="viewMode() !== 'history'">
+    <span class="chip-label">Cluster:</span>
     <ion-chip [color]="filterCluster() === null ? 'primary' : 'medium'" (click)="setCluster(null)">All</ion-chip>
     <ion-chip
       *ngFor="let c of clusters"
-      [style.--color]="c.color"
       [class.selected-chip]="filterCluster() === c.id"
       (click)="setCluster(filterCluster() === c.id ? null : c.id)">
       {{ c.name }}
     </ion-chip>
   </div>
 
-  <!-- Sort -->
-  <div class="sort-row">
+  <!-- Sort (only for cards/table/cluster) -->
+  <div class="sort-row" *ngIf="viewMode() !== 'history' && viewMode() !== 'agents'">
     <span class="sort-label">Sort:</span>
     <ion-segment [value]="sortField()" (ionChange)="setSort($any($event.detail.value))">
       <ion-segment-button value="priority">Priority</ion-segment-button>
@@ -71,21 +118,134 @@
     <p>Loading tasks...</p>
   </div>
 
-  <!-- Task grid -->
-  <div class="task-grid" *ngIf="!state.loading()">
-    <app-task-card
-      *ngFor="let task of filteredTasks(); trackBy: trackByGid"
-      [task]="task"
-      [run]="state.getRunForTask(task.task_gid)"
-      (openDetail)="openTask($event)"
-      (startAgent)="startAgent($event)"
-      (stopAgent)="stopAgent($event)">
-    </app-task-card>
+  <!-- ========== CARDS VIEW ========== -->
+  <ng-container *ngIf="viewMode() === 'cards' && !state.loading()">
+    <!-- Chart section -->
+    <div class="chart-section">
+      <canvas #clusterChartCanvas id="clusterChart" class="cluster-chart"></canvas>
+    </div>
 
-    <div *ngIf="filteredTasks().length === 0" class="empty-state">
-      <ion-icon name="albums-outline" size="large"></ion-icon>
+    <div class="task-grid">
+      <app-task-card
+        *ngFor="let task of filteredTasks(); trackBy: trackByGid"
+        [task]="task"
+        [run]="state.getRunForTask(task.task_gid)"
+        (openDetail)="openTask($event)"
+        (stopAgent)="stopAgent($event)">
+      </app-task-card>
+
+      <div *ngIf="filteredTasks().length === 0" class="empty-state">
+        <ion-icon name="albums-outline" size="large"></ion-icon>
+        <p>No tasks match the current filters</p>
+      </div>
+    </div>
+  </ng-container>
+
+  <!-- ========== TABLE VIEW ========== -->
+  <ng-container *ngIf="viewMode() === 'table' && !state.loading()">
+    <ion-list lines="full" class="table-list">
+      <ion-item
+        *ngFor="let task of filteredTasks(); trackBy: trackByGid"
+        button
+        detail="false"
+        (click)="openTask(task.task_gid)">
+        <ion-label>
+          <h3 class="table-task-name">{{ task.name }}</h3>
+          <p>
+            <span class="table-cluster" *ngIf="task.cluster">{{ task.cluster }}</span>
+            <span class="table-scope" *ngIf="task.scope_score">S{{ task.scope_score }}</span>
+          </p>
+        </ion-label>
+        <app-phase-badge
+          *ngIf="state.getRunForTask(task.task_gid)?.phase"
+          [phase]="state.getRunForTask(task.task_gid)!.phase"
+          slot="end">
+        </app-phase-badge>
+      </ion-item>
+      <ion-item *ngIf="filteredTasks().length === 0">
+        <ion-label color="medium">No tasks found</ion-label>
+      </ion-item>
+    </ion-list>
+  </ng-container>
+
+  <!-- ========== CLUSTER VIEW ========== -->
+  <ng-container *ngIf="viewMode() === 'cluster' && !state.loading()">
+    <div *ngFor="let group of clusteredTasks(); trackBy: trackByCluster" class="cluster-group">
+      <ion-card class="cluster-header-card">
+        <ion-card-header>
+          <ion-card-title>{{ group.cluster }}</ion-card-title>
+          <ion-card-subtitle>{{ group.items.length }} tasks</ion-card-subtitle>
+        </ion-card-header>
+      </ion-card>
+      <div class="cluster-tasks">
+        <app-task-card
+          *ngFor="let task of group.items; trackBy: trackByGid"
+          [task]="task"
+          [run]="state.getRunForTask(task.task_gid)"
+          (openDetail)="openTask($event)"
+          (stopAgent)="stopAgent($event)">
+        </app-task-card>
+      </div>
+    </div>
+    <div *ngIf="clusteredTasks().length === 0" class="empty-state">
+      <ion-icon name="layers-outline" size="large"></ion-icon>
       <p>No tasks match the current filters</p>
     </div>
-  </div>
+  </ng-container>
+
+  <!-- ========== AGENTS VIEW ========== -->
+  <ng-container *ngIf="viewMode() === 'agents' && !state.loading()">
+    <ion-list lines="full" class="agents-list">
+      <ion-item
+        *ngFor="let task of agentTasks(); trackBy: trackByGid"
+        button
+        detail="false"
+        (click)="openTask(task.task_gid)">
+        <ion-label>
+          <h3>{{ task.name }}</h3>
+          <p *ngIf="state.getRunForTask(task.task_gid)?.started_at">
+            Started: {{ state.getRunForTask(task.task_gid)?.started_at | date:'short' }}
+          </p>
+        </ion-label>
+        <app-phase-badge
+          *ngIf="state.getRunForTask(task.task_gid)?.phase"
+          [phase]="state.getRunForTask(task.task_gid)!.phase"
+          slot="end">
+        </app-phase-badge>
+      </ion-item>
+      <ion-item *ngIf="agentTasks().length === 0">
+        <ion-label color="medium">No active agent runs</ion-label>
+      </ion-item>
+    </ion-list>
+  </ng-container>
+
+  <!-- ========== HISTORY VIEW ========== -->
+  <ng-container *ngIf="viewMode() === 'history'">
+    <ion-list lines="full" class="history-list">
+      <ion-item
+        *ngFor="let item of historyItems(); let i = index; trackBy: trackByIdx"
+        button
+        detail="false"
+        (click)="openTask(historyAsRecord(item)['task_gid'] + '')">
+        <ion-label>
+          <h3>{{ historyAsRecord(item)['task_name'] || historyAsRecord(item)['task_gid'] }}</h3>
+          <p *ngIf="historyAsRecord(item)['started_at']">
+            {{ $any(historyAsRecord(item)['started_at']) | date:'short' }}
+          </p>
+          <p *ngIf="historyAsRecord(item)['cost_usd']">
+            Cost: ${{ (+historyAsRecord(item)['cost_usd']!).toFixed(4) }}
+          </p>
+        </ion-label>
+        <app-phase-badge
+          *ngIf="historyAsRecord(item)['phase']"
+          [phase]="$any(historyAsRecord(item)['phase'])"
+          slot="end">
+        </app-phase-badge>
+      </ion-item>
+      <ion-item *ngIf="historyItems().length === 0">
+        <ion-label color="medium">No history yet</ion-label>
+      </ion-item>
+    </ion-list>
+  </ng-container>
 
 </ion-content>

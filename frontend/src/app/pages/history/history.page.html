@@ -1,0 +1,53 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Agent History</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div *ngIf="loading()" class="loading-wrap">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Loading history...</p>
+  </div>
+
+  <ion-list *ngIf="!loading()" lines="full">
+    <ion-item
+      *ngFor="let item of items(); trackBy: trackByGid"
+      class="history-item">
+      <ion-label (click)="openTask(item['task_gid'] + '')">
+        <h3 class="task-name">{{ item['task_name'] || item['task_gid'] }}</h3>
+        <p *ngIf="item['started_at']" class="meta">
+          Started: {{ $any(item['started_at']) | date:'medium' }}
+        </p>
+        <p *ngIf="item['cost_usd']" class="meta">
+          Cost: ${{ (+$any(item['cost_usd'])).toFixed(4) }}
+        </p>
+        <p *ngIf="item['duration_seconds']" class="meta">
+          Duration: {{ item['duration_seconds'] }}s
+        </p>
+      </ion-label>
+
+      <div slot="end" class="item-end">
+        <app-phase-badge *ngIf="getPhase(item)" [phase]="$any(getPhase(item))"></app-phase-badge>
+        <ion-button
+          fill="clear"
+          size="small"
+          color="danger"
+          [disabled]="clearing() === item['task_gid'] + ''"
+          (click)="clearItem(item['task_gid'] + '')">
+          <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+        </ion-button>
+      </div>
+    </ion-item>
+
+    <ion-item *ngIf="items().length === 0">
+      <ion-label color="medium">
+        <h3>No history yet</h3>
+        <p>Agent runs will appear here after completion</p>
+      </ion-label>
+    </ion-item>
+  </ion-list>
+</ion-content>

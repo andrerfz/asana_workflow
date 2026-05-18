@@ -1,0 +1,63 @@
+.branch-info {
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.branch-label {
+  font-size: 12px;
+  color: var(--ion-color-medium);
+  margin: 0 0 4px;
+}
+
+.branch-slug {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--ion-color-primary);
+  word-break: break-all;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ion-color-medium);
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.suggestions-section {
+  margin-bottom: 24px;
+}
+
+.suggestions-list {
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ion-card-background, var(--ion-background-color));
+}
+
+.suggestion-item {
+  --padding-start: 12px;
+  --inner-padding-end: 12px;
+
+  h3 {
+    font-size: 13px;
+    font-weight: 500;
+    font-family: monospace;
+  }
+
+  p {
+    font-size: 11px;
+    color: var(--ion-color-medium);
+  }
+}
+
+.fresh-section {
+  margin-bottom: 16px;
+}
+
+.cancel-btn {
+  margin-top: 8px;
+  color: var(--ion-color-medium);
+}

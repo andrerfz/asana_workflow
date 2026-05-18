@@ -1,0 +1,46 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Start Agent</ion-title>
+    <ion-buttons slot="end">
+      <ion-button fill="clear" (click)="cancel()">Cancel</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="branch-info" *ngIf="branchSlug">
+    <p class="branch-label">Suggested branch name:</p>
+    <code class="branch-slug">{{ branchSlug }}</code>
+  </div>
+
+  <div *ngIf="suggestions.length > 0" class="suggestions-section">
+    <p class="section-title">Continue on existing branch:</p>
+    <ion-list lines="none" class="suggestions-list">
+      <ion-item
+        *ngFor="let s of suggestions"
+        button
+        detail="false"
+        class="suggestion-item"
+        (click)="selectExisting(s.branch)">
+        <ion-icon slot="start" name="git-branch-outline" color="primary"></ion-icon>
+        <ion-label>
+          <h3>{{ s.branch }}</h3>
+          <p>{{ s.author }}</p>
+        </ion-label>
+        <ion-icon slot="end" name="chevron-forward-outline" color="medium"></ion-icon>
+      </ion-item>
+    </ion-list>
+  </div>
+
+  <div class="fresh-section">
+    <p class="section-title">Or start fresh:</p>
+    <ion-button expand="block" fill="outline" color="primary" (click)="selectFresh()">
+      <ion-icon slot="start" name="add-circle-outline"></ion-icon>
+      Fresh branch
+    </ion-button>
+  </div>
+
+  <ion-button expand="block" fill="clear" color="medium" (click)="cancel()" class="cancel-btn">
+    Cancel
+  </ion-button>
+</ion-content>

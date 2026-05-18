@@ -14,6 +14,10 @@ const routes: Routes = [
     path: 'settings',
     loadChildren: () => import('./pages/settings/settings.module').then(m => m.SettingsModule),
   },
+  {
+    path: 'history',
+    loadChildren: () => import('./pages/history/history.module').then(m => m.HistoryModule),
+  },
   { path: '**', redirectTo: '', pathMatch: 'full' },
 ];
 

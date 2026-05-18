@@ -16,15 +16,48 @@
       <span class="last-log" *ngIf="lastLog && isRunning">{{ lastLog | slice:0:80 }}</span>
     </div>
 
-    <div class="card-actions">
-      <ion-button fill="clear" size="small" color="primary" (click)="onStart($event)" *ngIf="!isRunning">
+    <!-- Approval quick actions -->
+    <div class="approval-actions" *ngIf="run?.phase === 'awaiting_approval'" (click)="$event.stopPropagation()">
+      <ion-button fill="solid" size="small" color="success" (click)="onApprove($event)">
+        <ion-icon slot="start" name="checkmark-outline"></ion-icon>
+        Approve
+      </ion-button>
+      <ion-button fill="outline" size="small" color="danger" (click)="onReject($event)">
+        <ion-icon slot="start" name="close-outline"></ion-icon>
+        Reject
+      </ion-button>
+    </div>
+
+    <div class="card-actions" (click)="$event.stopPropagation()">
+      <!-- Repo selector -->
+      <ion-select
+        *ngIf="availableRepos.length > 0"
+        multiple="true"
+        placeholder="Repos"
+        [value]="selectedRepoIds"
+        (ionChange)="onRepoChange($event)"
+        class="repo-select"
+        fill="outline"
+        size="small">
+        <ion-select-option *ngFor="let repo of availableRepos" [value]="repo.id">
+          {{ repo.name || repo.id }}
+        </ion-select-option>
+      </ion-select>
+
+      <!-- Run / Re-run / Stop buttons -->
+      <ion-button fill="clear" size="small" color="primary" (click)="onStart($event)" *ngIf="!isRunning && !isDoneOrError">
         <ion-icon slot="start" name="play-circle-outline"></ion-icon>
         Run
+      </ion-button>
+      <ion-button fill="clear" size="small" color="primary" (click)="onRerun($event)" *ngIf="isDoneOrError">
+        <ion-icon slot="start" name="refresh-circle-outline"></ion-icon>
+        Re-run
       </ion-button>
       <ion-button fill="clear" size="small" color="danger" (click)="onStop($event)" *ngIf="isRunning">
         <ion-icon slot="start" name="stop-circle-outline"></ion-icon>
         Stop
       </ion-button>
+
       <ion-button fill="clear" size="small" color="medium" (click)="onOpen()">
         <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
       </ion-button>

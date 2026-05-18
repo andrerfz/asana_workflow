@@ -1,7 +1,8 @@
-import { Injectable, signal, computed, effect } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AgentRun, LogEntry, ConversationMessage, Task } from '../models/task.model';
+import { ApiService } from './api.service';
 
 interface WsEvent {
   event: string;
@@ -14,6 +15,7 @@ export class AgentStateService {
   readonly agentRuns = signal<Record<string, AgentRun>>({});
   readonly connected = signal(false);
   readonly loading = signal(false);
+  readonly taskRepoOverrides = signal<Record<string, string[]>>({});
 
   readonly activeRuns = computed(() =>
     Object.values(this.agentRuns()).filter(r => r.is_active)
@@ -26,7 +28,7 @@ export class AgentStateService {
   private ws: WebSocket | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private api: ApiService) {
     this.loadInitialState();
     this.connect();
   }
@@ -44,6 +46,12 @@ export class AgentStateService {
         runsMap[run.task_gid] = run;
       }
       this.agentRuns.set(runsMap);
+
+      // Load repo overrides in background
+      this.api.getTaskRepoOverrides().subscribe({
+        next: (overrides) => this.taskRepoOverrides.set(overrides ?? {}),
+        error: (e) => console.error('[AgentState] Failed to load repo overrides', e),
+      });
     } catch (e) {
       console.error('[AgentState] Initial load failed', e);
     } finally {
@@ -119,6 +127,68 @@ export class AgentStateService {
       this.http.post<AgentRun>(`/api/agent/start/${taskGid}`, {})
     );
     this.agentRuns.update(runs => ({ ...runs, [taskGid]: run }));
+  }
+
+  async startAgentWithBranch(taskGid: string): Promise<{ needsModal: boolean; slug: string; suggestions: { branch: string; author: string }[] }> {
+    try {
+      const [branchRes, suggestionsRes] = await Promise.all([
+        firstValueFrom(this.api.getBranchName(taskGid)),
+        firstValueFrom(this.api.getBranchSuggestions(taskGid)),
+      ]);
+      const slug = branchRes?.branch ?? '';
+      const suggestions = suggestionsRes?.branches ?? [];
+      const needsModal = suggestions.length > 0 || !!slug;
+      return { needsModal, slug, suggestions };
+    } catch (e) {
+      console.error('[AgentState] startAgentWithBranch failed', e);
+      return { needsModal: false, slug: '', suggestions: [] };
+    }
+  }
+
+  async confirmStart(taskGid: string, slug: string, baseBranch: string | null): Promise<void> {
+    const body: Record<string, unknown> = { branch_slug: slug };
+    if (baseBranch) body['base_branch'] = baseBranch;
+    const run = await firstValueFrom(
+      this.http.post<AgentRun>(`/api/agent/start/${taskGid}`, body)
+    );
+    this.agentRuns.update(runs => ({ ...runs, [taskGid]: run }));
+  }
+
+  async updateTaskRepos(taskGid: string, repoIds: string[]): Promise<void> {
+    try {
+      await firstValueFrom(this.api.updateTaskRepos(taskGid, repoIds));
+      this.taskRepoOverrides.update(o => ({ ...o, [taskGid]: repoIds }));
+    } catch (e) {
+      console.error('[AgentState] updateTaskRepos failed', e);
+    }
+  }
+
+  async runManualQA(taskGid: string): Promise<void> {
+    try {
+      await firstValueFrom(this.api.runQA(taskGid));
+    } catch (e) {
+      console.error('[AgentState] runManualQA failed', e);
+    }
+  }
+
+  async runManualTest(taskGid: string): Promise<{ all_passed: boolean }> {
+    try {
+      const res = await firstValueFrom(this.api.runTest(taskGid));
+      return res ?? { all_passed: false };
+    } catch (e) {
+      console.error('[AgentState] runManualTest failed', e);
+      return { all_passed: false };
+    }
+  }
+
+  async revisePlan(taskGid: string, feedback: string): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.http.post(`/api/agent/answer/${taskGid}`, { answer: `revise:${feedback}` })
+      );
+    } catch (e) {
+      console.error('[AgentState] revisePlan failed', e);
+    }
   }
 
   async stopAgent(taskGid: string): Promise<void> {

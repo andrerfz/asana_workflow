@@ -69,9 +69,23 @@
   white-space: nowrap;
 }
 
+.approval-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .card-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 4px;
+  gap: 4px;
+}
+
+.repo-select {
+  font-size: 11px;
+  max-width: 120px;
+  --padding-top: 2px;
+  --padding-bottom: 2px;
 }
