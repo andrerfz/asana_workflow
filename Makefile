@@ -1,4 +1,4 @@
-.PHONY: help build up down restart recreate logs shell clean dev setup setup-agent test frontend frontend-dev electron-start
+.PHONY: help build up down restart recreate logs shell clean dev dev-ui setup setup-agent test frontend electron-start
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -45,14 +45,25 @@ shell: ## Open a shell inside the container
 
 # --- Development ---
 
-dev: ## Run locally without Docker (hot reload)
+dev: ## Run FastAPI only — serves the last built frontend at :8765
 	@echo ""
 	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-	@echo "\033[1;32m  Dashboard starting at:\033[0m"
-	@echo "\033[1;36m  http://localhost:8765\033[0m"
+	@echo "\033[1;32m  Dashboard at: http://localhost:8765\033[0m"
 	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 	@echo ""
 	uvicorn app:app --host 127.0.0.1 --port 8765 --reload
+
+dev-ui: ## Run FastAPI + Angular HMR together (Ctrl+C stops both)
+	@echo ""
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo "\033[1;32m  Backend:  http://localhost:8765\033[0m"
+	@echo "\033[1;32m  Frontend: http://localhost:4200  (HMR)\033[0m"
+	@echo "\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+	@echo ""
+	@trap 'kill 0' EXIT; \
+	uvicorn app:app --host 127.0.0.1 --port 8765 --reload & \
+	cd frontend && npm start; \
+	wait
 
 setup: ## First-time setup: copy .env, install deps, create data dir
 	@test -f .env || cp .env.example .env
@@ -72,9 +83,6 @@ frontend: ## Build Angular/Ionic frontend (outputs to app/static/)
 	@echo "\033[1;32m  Frontend built → app/static/\033[0m"
 	@echo "\033[1;32m  Restart FastAPI to serve new build.\033[0m"
 	@echo ""
-
-frontend-dev: ## Dev server with HMR at :4200 (FastAPI must be running on :8765)
-	cd frontend && npm start
 
 electron-start: ## Run desktop app (FastAPI + Electron window)
 	cd electron && npm start
