@@ -103,18 +103,6 @@
   overflow: hidden;
 }
 
-.branch-btn {
-  max-width: 96px;
-  min-width: 0;
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 10px;
-    font-family: monospace;
-    max-width: 70px;
-  }
-}
 
 .repo-select {
   font-size: 11px;

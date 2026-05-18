@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, signal } from '@angular/core';
-import { ModalController } from '@ionic/angular';
+import { ModalController, ToastController } from '@ionic/angular';
 import { Task, AgentRun } from '../../../core/models/task.model';
 import { AgentStateService } from '../../../core/services/agent-state.service';
 import { ApiService, Repo } from '../../../core/services/api.service';
@@ -27,6 +27,7 @@ export class TaskCardComponent implements OnInit {
 
   constructor(
     private modalCtrl: ModalController,
+    private toastCtrl: ToastController,
     private state: AgentStateService,
     private api: ApiService,
   ) {}
@@ -162,6 +163,14 @@ export class TaskCardComponent implements OnInit {
       if (branch) {
         await navigator.clipboard.writeText(branch);
         this.copiedBranch.set(branch);
+        const toast = await this.toastCtrl.create({
+          message: `Copied: ${branch}`,
+          duration: 2500,
+          position: 'bottom',
+          color: 'success',
+          cssClass: 'branch-toast',
+        });
+        await toast.present();
         setTimeout(() => this.copiedBranch.set(''), 2500);
       }
     } catch (err) {

@@ -44,9 +44,8 @@
       </ion-button>
 
       <div class="action-icons">
-        <ion-button fill="clear" size="small" color="medium" (click)="onCopyBranch($event)" [disabled]="copyingBranch()" class="branch-btn">
-          <ion-icon slot="start" [name]="copyingBranch() ? 'hourglass-outline' : copiedBranch() ? 'checkmark-outline' : 'copy-outline'"></ion-icon>
-          <span>{{ copiedBranch() ? copiedBranch() : 'Branch' }}</span>
+        <ion-button fill="clear" size="small" color="medium" (click)="onCopyBranch($event)" [disabled]="copyingBranch()" title="Generate & copy branch name">
+          <ion-icon slot="icon-only" [name]="copyingBranch() ? 'hourglass-outline' : copiedBranch() ? 'checkmark-outline' : 'copy-outline'" [color]="copiedBranch() ? 'success' : ''"></ion-icon>
         </ion-button>
         <ion-button fill="clear" size="small" color="medium" (click)="onClassify($event)" [disabled]="classifying()">
           <ion-icon slot="start" [name]="classifying() ? 'hourglass-outline' : 'sparkles-outline'"></ion-icon>
