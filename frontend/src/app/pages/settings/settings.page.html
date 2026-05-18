@@ -43,7 +43,7 @@
       <ion-list-header>Found {{ scannedRepos().length }} new repos</ion-list-header>
       <ion-item *ngFor="let r of scannedRepos()">
         <ion-label>
-          <h3>{{ r.name || r.id }}</h3>
+          <h3>{{ r.id }}</h3>
           <p>{{ r.path }}</p>
         </ion-label>
       </ion-item>
@@ -89,7 +89,7 @@
           <ion-card-header>
             <div class="repo-card-title-row">
               <div>
-                <ion-card-title>{{ repo.name || repo.id }}</ion-card-title>
+                <ion-card-title>{{ repo.id }}</ion-card-title>
                 <ion-card-subtitle class="mono">{{ repo.path }}</ion-card-subtitle>
               </div>
               <div class="repo-status-dot"></div>
@@ -188,7 +188,7 @@
               [value]="entry.repoIds"
               (ionChange)="onAreaRepoChange(entry.area, $event)">
               <ion-select-option *ngFor="let repo of repos()" [value]="repo.id">
-                {{ repo.name || repo.id }}
+                {{ repo.id }}
               </ion-select-option>
             </ion-select>
           </ion-item>
@@ -240,17 +240,26 @@
     <ion-list>
       <ion-list-header>Agent Configuration</ion-list-header>
       <ion-item>
-        <ion-label>Max concurrent agents</ion-label>
-        <ion-select [value]="settings().max_concurrent_agents" (ionChange)="onMaxConcurrent($event)" slot="end">
-          <ion-select-option [value]="1">1</ion-select-option>
-          <ion-select-option [value]="2">2</ion-select-option>
-          <ion-select-option [value]="3">3</ion-select-option>
-          <ion-select-option [value]="4">4</ion-select-option>
-        </ion-select>
+        <ion-label position="stacked">Move task to section on start</ion-label>
+        <ion-input [value]="settings().section_on_start" (ionInput)="onSettingsField('section_on_start', $event)"></ion-input>
       </ion-item>
       <ion-item>
-        <ion-label>Auto-approve plans</ion-label>
-        <ion-toggle [checked]="settings().auto_approve_plan" (ionChange)="onAutoApprove($event)" slot="end"></ion-toggle>
+        <ion-label position="stacked">Move task to section on done</ion-label>
+        <ion-input [value]="settings().section_on_done" (ionInput)="onSettingsField('section_on_done', $event)"></ion-input>
+      </ion-item>
+      <ion-item>
+        <ion-label position="stacked">Move task to section on error</ion-label>
+        <ion-input [value]="settings().section_on_error" (ionInput)="onSettingsField('section_on_error', $event)"></ion-input>
+      </ion-item>
+      <ion-item>
+        <ion-label>Agent timeout (minutes)</ion-label>
+        <ion-select [value]="settings().agent_timeout_minutes" (ionChange)="onSettingsField('agent_timeout_minutes', $event)" slot="end">
+          <ion-select-option [value]="30">30</ion-select-option>
+          <ion-select-option [value]="45">45</ion-select-option>
+          <ion-select-option [value]="60">60</ion-select-option>
+          <ion-select-option [value]="90">90</ion-select-option>
+          <ion-select-option [value]="120">120</ion-select-option>
+        </ion-select>
       </ion-item>
     </ion-list>
     <div class="save-row">

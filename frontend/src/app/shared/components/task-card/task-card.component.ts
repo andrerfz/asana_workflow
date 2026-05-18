@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, signal } from '@angular/core';
 import { ModalController } from '@ionic/angular';
 import { Task, AgentRun } from '../../../core/models/task.model';
 import { AgentStateService } from '../../../core/services/agent-state.service';
@@ -21,6 +21,7 @@ export class TaskCardComponent implements OnInit {
 
   availableRepos: Repo[] = [];
   selectedRepoIds: string[] = [];
+  classifying = signal(false);
 
   constructor(
     private modalCtrl: ModalController,
@@ -147,6 +148,20 @@ export class TaskCardComponent implements OnInit {
       handle: true,
     });
     await modal.present();
+  }
+
+  async onClassify(e: Event): Promise<void> {
+    e.stopPropagation();
+    if (this.classifying()) return;
+    this.classifying.set(true);
+    try {
+      await firstValueFrom(this.api.classifyTask(this.task.task_gid));
+      await this.state.refreshTasks();
+    } catch (err) {
+      console.error('[TaskCard] classify failed', err);
+    } finally {
+      this.classifying.set(false);
+    }
   }
 
   onRepoChange(e: CustomEvent): void {

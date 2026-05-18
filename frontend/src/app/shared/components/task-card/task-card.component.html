@@ -40,7 +40,7 @@
         fill="outline"
         size="small">
         <ion-select-option *ngFor="let repo of availableRepos" [value]="repo.id">
-          {{ repo.name || repo.id }}
+          {{ repo.id }}
         </ion-select-option>
       </ion-select>
 
@@ -58,6 +58,9 @@
         Stop
       </ion-button>
 
+      <ion-button fill="clear" size="small" color="medium" (click)="onClassify($event)" [disabled]="classifying()" title="AI classify">
+        <ion-icon slot="icon-only" [name]="classifying() ? 'hourglass-outline' : 'sparkles-outline'"></ion-icon>
+      </ion-button>
       <ion-button fill="clear" size="small" color="medium" (click)="onOpenConsole($event)" *ngIf="hasRun" title="Open console">
         <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
       </ion-button>

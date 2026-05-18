@@ -4,16 +4,23 @@ import { Observable } from 'rxjs';
 
 export interface Repo {
   id: string;
-  name: string;
   path: string;
   default_branch?: string;
   test_cmd?: string;
+  test_worktree_cmd?: string;
+  test_worktree_cmd_fast?: string;
   lint_cmd?: string;
+  build_cmd?: string | null;
+  language?: string;
+  context_files?: string[];
+  health?: { status: string; details: string };
 }
 
 export interface AgentSettings {
-  max_concurrent_agents: number;
-  auto_approve_plan: boolean;
+  section_on_start: string;
+  section_on_done: string;
+  section_on_error: string;
+  agent_timeout_minutes: number;
 }
 
 export interface Guide {
@@ -41,7 +48,12 @@ export class ApiService {
   constructor(private http: HttpClient) {}
 
   getRepos(): Observable<Repo[]> {
-    return this.http.get<Repo[]>('/api/repos');
+    return new Observable(obs => {
+      this.http.get<{ repos: Repo[] }>('/api/repos').subscribe({
+        next: r => { obs.next(r.repos ?? []); obs.complete(); },
+        error: e => obs.error(e),
+      });
+    });
   }
 
   getRepoConfig(): Observable<{ projects_dir: string }> {
@@ -61,7 +73,12 @@ export class ApiService {
   }
 
   getAreaMapping(): Observable<Record<string, string[]>> {
-    return this.http.get<Record<string, string[]>>('/api/repos/mapping/areas');
+    return new Observable(obs => {
+      this.http.get<{ area_repo_map: Record<string, string[]> }>('/api/repos/mapping/areas').subscribe({
+        next: r => { obs.next(r.area_repo_map ?? {}); obs.complete(); },
+        error: e => obs.error(e),
+      });
+    });
   }
 
   saveAreaMapping(area: string, repoIds: string[]): Observable<unknown> {
@@ -138,5 +155,9 @@ export class ApiService {
 
   classifyAll(): Observable<unknown> {
     return this.http.post('/api/ai/classify-all', {});
+  }
+
+  classifyTask(gid: string): Observable<unknown> {
+    return this.http.post(`/api/ai/classify/${gid}`, {});
   }
 }

@@ -47,7 +47,7 @@ export class SettingsPage implements OnInit {
   readonly savingArea = signal<string | null>(null);
 
   // Agent tab
-  readonly settings = signal<AgentSettings>({ max_concurrent_agents: 2, auto_approve_plan: false });
+  readonly settings = signal<AgentSettings>({ section_on_start: '', section_on_done: '', section_on_error: '', agent_timeout_minutes: 45 });
   readonly cliStatus = signal<CliStatus | null>(null);
   readonly savingSettings = signal(false);
 
@@ -207,12 +207,9 @@ export class SettingsPage implements OnInit {
     }
   }
 
-  onMaxConcurrent(e: CustomEvent): void {
-    this.settings.update(s => ({ ...s, max_concurrent_agents: +e.detail.value }));
-  }
-
-  onAutoApprove(e: CustomEvent): void {
-    this.settings.update(s => ({ ...s, auto_approve_plan: !!e.detail.checked }));
+  onSettingsField(field: keyof AgentSettings, e: CustomEvent): void {
+    const val = field === 'agent_timeout_minutes' ? +e.detail.value : (e.detail.value ?? '');
+    this.settings.update(s => ({ ...s, [field]: val }));
   }
 
   async saveSettings(): Promise<void> {
