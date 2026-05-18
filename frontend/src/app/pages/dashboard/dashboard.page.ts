@@ -233,8 +233,8 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
 
   async loadHistory(): Promise<void> {
     try {
-      const items = await firstValueFrom(this.api.getAgentHistory());
-      this.historyItems.set(items ?? []);
+      const res = await firstValueFrom(this.api.getAgentHistory());
+      this.historyItems.set(res?.runs ?? []);
     } catch (e) {
       console.error('[Dashboard] loadHistory failed', e);
     }

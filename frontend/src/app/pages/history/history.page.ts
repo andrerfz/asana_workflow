@@ -24,8 +24,8 @@ export class HistoryPage implements OnInit {
   async ngOnInit(): Promise<void> {
     this.loading.set(true);
     try {
-      const data = await firstValueFrom(this.api.getAgentHistory());
-      this.items.set((data ?? []) as Record<string, unknown>[]);
+      const res = await firstValueFrom(this.api.getAgentHistory());
+      this.items.set((res?.runs ?? []) as Record<string, unknown>[]);
     } catch (e) {
       console.error('[History] load failed', e);
     } finally {

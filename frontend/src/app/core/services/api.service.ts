@@ -97,8 +97,8 @@ export class ApiService {
     return this.http.get<CliStatus>('/api/agent/cli-status');
   }
 
-  getAgentHistory(): Observable<unknown[]> {
-    return this.http.get<unknown[]>('/api/agent/history');
+  getAgentHistory(): Observable<{ runs: unknown[]; stats: unknown }> {
+    return this.http.get<{ runs: unknown[]; stats: unknown }>('/api/agent/history');
   }
 
   getTaskRepoOverrides(): Observable<Record<string, string[]>> {
