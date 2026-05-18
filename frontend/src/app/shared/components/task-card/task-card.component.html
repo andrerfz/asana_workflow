@@ -29,28 +29,13 @@
     </div>
 
     <div class="card-actions" (click)="$event.stopPropagation()">
-      <!-- Repo selector -->
-      <ion-select
-        *ngIf="availableRepos.length > 0"
-        multiple="true"
-        placeholder="Repos"
-        [value]="selectedRepoIds"
-        (ionChange)="onRepoChange($event)"
-        class="repo-select"
-        fill="outline"
-        size="small">
-        <ion-select-option *ngFor="let repo of availableRepos" [value]="repo.id">
-          {{ repo.id }}
-        </ion-select-option>
-      </ion-select>
-
-      <!-- Run / Re-run / Stop buttons -->
+      <!-- Primary action: Run / Stop / Re-run -->
       <ion-button fill="clear" size="small" color="primary" (click)="onStart($event)" *ngIf="!isRunning && !isDoneOrError">
-        <ion-icon slot="start" name="play-circle-outline"></ion-icon>
+        <ion-icon slot="start" name="git-branch-outline"></ion-icon>
         Run
       </ion-button>
       <ion-button fill="clear" size="small" color="primary" (click)="onRerun($event)" *ngIf="isDoneOrError">
-        <ion-icon slot="start" name="refresh-circle-outline"></ion-icon>
+        <ion-icon slot="start" name="git-branch-outline"></ion-icon>
         Re-run
       </ion-button>
       <ion-button fill="clear" size="small" color="danger" (click)="onStop($event)" *ngIf="isRunning">
@@ -58,15 +43,18 @@
         Stop
       </ion-button>
 
-      <ion-button fill="clear" size="small" color="medium" (click)="onClassify($event)" [disabled]="classifying()" title="AI classify">
-        <ion-icon slot="icon-only" [name]="classifying() ? 'hourglass-outline' : 'sparkles-outline'"></ion-icon>
-      </ion-button>
-      <ion-button fill="clear" size="small" color="medium" (click)="onOpenConsole($event)" *ngIf="hasRun" title="Open console">
-        <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
-      </ion-button>
-      <ion-button fill="clear" size="small" color="medium" (click)="onOpen()">
-        <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
-      </ion-button>
+      <div class="action-icons">
+        <ion-button fill="clear" size="small" color="medium" (click)="onClassify($event)" [disabled]="classifying()">
+          <ion-icon slot="start" [name]="classifying() ? 'hourglass-outline' : 'sparkles-outline'"></ion-icon>
+          Classify
+        </ion-button>
+        <ion-button fill="clear" size="small" color="medium" (click)="onOpenConsole($event)" *ngIf="hasRun">
+          <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" size="small" color="medium" (click)="onOpen()">
+          <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
+        </ion-button>
+      </div>
     </div>
   </ion-card-content>
 
