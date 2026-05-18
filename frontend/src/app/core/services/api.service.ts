@@ -21,23 +21,23 @@ export class ApiService {
   constructor(private http: HttpClient) {}
 
   getRepos(): Observable<Repo[]> {
-    return this.http.get<Repo[]>('/repos');
+    return this.http.get<Repo[]>('/api/repos');
   }
 
   getAgentSettings(): Observable<AgentSettings> {
-    return this.http.get<AgentSettings>('/agent/settings');
+    return this.http.get<AgentSettings>('/api/agent/settings');
   }
 
   updateAgentSettings(settings: Partial<AgentSettings>): Observable<AgentSettings> {
-    return this.http.put<AgentSettings>('/agent/settings', settings);
+    return this.http.put<AgentSettings>('/api/agent/settings', settings);
   }
 
   getAgentHistory(): Observable<unknown[]> {
-    return this.http.get<unknown[]>('/agent/history');
+    return this.http.get<unknown[]>('/api/agent/history');
   }
 
   getDiff(taskGid: string, repoId: string): Observable<{ diff: string }> {
-    return this.http.get<{ diff: string }>(`/agent/diff/${taskGid}/${repoId}`);
+    return this.http.get<{ diff: string }>(`/api/agent/diff/${taskGid}/${repoId}`);
   }
 
   openInIde(path: string, ide: { cli?: string; cliArgs?: string[]; app?: string }): Observable<{ status: string }> {
@@ -45,10 +45,10 @@ export class ApiService {
   }
 
   getClusters(): Observable<Record<string, unknown>> {
-    return this.http.get<Record<string, unknown>>('/clusters');
+    return this.http.get<Record<string, unknown>>('/api/clusters');
   }
 
   classifyAll(): Observable<unknown> {
-    return this.http.post('/ai/classify-all', {});
+    return this.http.post('/api/ai/classify-all', {});
   }
 }

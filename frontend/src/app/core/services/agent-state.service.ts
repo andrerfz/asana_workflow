@@ -35,8 +35,8 @@ export class AgentStateService {
     this.loading.set(true);
     try {
       const [tasksRes, agentsRes] = await Promise.all([
-        firstValueFrom(this.http.get<{ tasks: Task[] }>('/tasks')),
-        firstValueFrom(this.http.get<AgentRun[]>('/agent')),
+        firstValueFrom(this.http.get<{ tasks: Task[] }>('/api/tasks')),
+        firstValueFrom(this.http.get<AgentRun[]>('/api/agent')),
       ]);
       this.tasks.set(tasksRes.tasks ?? []);
       const runsMap: Record<string, AgentRun> = {};
@@ -110,19 +110,19 @@ export class AgentStateService {
   }
 
   async refreshTasks(): Promise<void> {
-    const res = await firstValueFrom(this.http.post<{ tasks: Task[] }>('/tasks/refresh', {}));
+    const res = await firstValueFrom(this.http.post<{ tasks: Task[] }>('/api/tasks/refresh', {}));
     if (res?.tasks) this.tasks.set(res.tasks);
   }
 
   async startAgent(taskGid: string): Promise<void> {
     const run = await firstValueFrom(
-      this.http.post<AgentRun>(`/agent/start/${taskGid}`, {})
+      this.http.post<AgentRun>(`/api/agent/start/${taskGid}`, {})
     );
     this.agentRuns.update(runs => ({ ...runs, [taskGid]: run }));
   }
 
   async stopAgent(taskGid: string): Promise<void> {
-    await firstValueFrom(this.http.post(`/agent/stop/${taskGid}`, {}));
+    await firstValueFrom(this.http.post(`/api/agent/stop/${taskGid}`, {}));
     this.agentRuns.update(runs => {
       const run = runs[taskGid];
       if (!run) return runs;
@@ -132,24 +132,24 @@ export class AgentStateService {
 
   async answerQuestion(taskGid: string, answer: string): Promise<void> {
     await firstValueFrom(
-      this.http.post(`/agent/answer/${taskGid}`, { answer })
+      this.http.post(`/api/agent/answer/${taskGid}`, { answer })
     );
   }
 
   async resumeAgent(taskGid: string, feedback?: string): Promise<void> {
     await firstValueFrom(
-      this.http.post(`/agent/resume/${taskGid}`, { feedback: feedback ?? '' })
+      this.http.post(`/api/agent/resume/${taskGid}`, { feedback: feedback ?? '' })
     );
   }
 
   async sendGuideMessage(taskGid: string, message: string): Promise<void> {
     await firstValueFrom(
-      this.http.post(`/agent/guide/${taskGid}`, { message })
+      this.http.post(`/api/agent/guide/${taskGid}`, { message })
     );
   }
 
   async clearRun(taskGid: string): Promise<void> {
-    await firstValueFrom(this.http.delete(`/agent/clear/${taskGid}`));
+    await firstValueFrom(this.http.delete(`/api/agent/clear/${taskGid}`));
     this.agentRuns.update(runs => {
       const copy = { ...runs };
       delete copy[taskGid];
@@ -159,7 +159,7 @@ export class AgentStateService {
 
   async reloadRun(taskGid: string): Promise<void> {
     const run = await firstValueFrom(
-      this.http.get<AgentRun>(`/agent/status/${taskGid}`)
+      this.http.get<AgentRun>(`/api/agent/status/${taskGid}`)
     );
     this.agentRuns.update(runs => ({ ...runs, [taskGid]: run }));
   }
