@@ -24,6 +24,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Build Angular/Ionic frontend → app/static/
+RUN cd /app/frontend && npm ci --prefer-offline && npm run build && rm -rf node_modules
+
 RUN mkdir -p /app/data
 
 # Non-root user — Claude Code CLI refuses --dangerously-skip-permissions as root

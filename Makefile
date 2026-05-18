@@ -65,10 +65,11 @@ dev-ui: ## Run FastAPI + Angular HMR together (Ctrl+C stops both)
 	cd frontend && npm start; \
 	wait
 
-setup: ## First-time setup: copy .env, install deps, create data dir
+setup: ## First-time setup: copy .env, install deps, build frontend
 	@test -f .env || cp .env.example .env
 	@mkdir -p data
 	pip install -r requirements.txt
+	cd frontend && npm install && npm run build
 	@echo ""
 	@echo "✓ Setup done. Edit .env with your Asana PAT, then run: make setup-agent"
 

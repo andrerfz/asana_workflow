@@ -1,0 +1,20 @@
+.env
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+.DS_Store
+data/
+tasks/
+.idea
+.claude
+
+# Frontend build artifacts (rebuilt inside container)
+frontend/node_modules/
+frontend/.angular/
+frontend/www/
+
+# Electron (not needed in container)
+electron/node_modules/
+electron/
