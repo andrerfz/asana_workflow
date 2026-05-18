@@ -2,22 +2,30 @@
   <ion-toolbar>
     <ion-title>Agent Dashboard</ion-title>
     <ion-buttons slot="end">
-      <ion-badge color="success" *ngIf="state.connected()">●</ion-badge>
-      <ion-badge color="danger" *ngIf="!state.connected()">○</ion-badge>
-      <ion-button (click)="refresh()" fill="clear" [disabled]="state.loading()">
-        <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
+      <span class="ws-dot" [class.connected]="state.connected()" title="{{ state.connected() ? 'Connected' : 'Disconnected' }}">●</span>
+      <ion-button (click)="refresh()" fill="clear" size="small" [disabled]="state.loading()">
+        <ion-icon slot="start" name="refresh-outline"></ion-icon>
+        Refresh
       </ion-button>
-      <ion-button (click)="sync()" fill="clear" [disabled]="syncing()">
-        <ion-icon slot="icon-only" name="cloud-download-outline"></ion-icon>
+      <ion-button (click)="sync()" fill="clear" size="small" [disabled]="syncing()">
+        <ion-icon slot="start" name="cloud-download-outline"></ion-icon>
+        Sync
       </ion-button>
-      <ion-button (click)="classifyAll()" fill="clear" [disabled]="classifying()">
-        <ion-icon slot="icon-only" name="sparkles-outline"></ion-icon>
+      <ion-button (click)="classifyAll()" fill="clear" size="small" [disabled]="classifying()">
+        <ion-icon slot="start" name="sparkles-outline"></ion-icon>
+        Classify
       </ion-button>
-      <ion-button routerLink="/settings" fill="clear">
-        <ion-icon slot="icon-only" name="settings-outline"></ion-icon>
+      <ion-button (click)="toggleDarkMode()" fill="clear" size="small">
+        <ion-icon slot="start" [name]="darkMode() ? 'sunny-outline' : 'moon-outline'"></ion-icon>
+        {{ darkMode() ? 'Light' : 'Dark' }}
       </ion-button>
-      <ion-button routerLink="/history" fill="clear">
-        <ion-icon slot="icon-only" name="time-outline"></ion-icon>
+      <ion-button routerLink="/history" fill="clear" size="small">
+        <ion-icon slot="start" name="time-outline"></ion-icon>
+        History
+      </ion-button>
+      <ion-button routerLink="/settings" fill="clear" size="small">
+        <ion-icon slot="start" name="settings-outline"></ion-icon>
+        Settings
       </ion-button>
     </ion-buttons>
   </ion-toolbar>

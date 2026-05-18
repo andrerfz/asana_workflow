@@ -102,9 +102,16 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
     };
   });
 
+  readonly darkMode = signal(false);
+
   private chart: Chart | null = null;
 
-  constructor(public state: AgentStateService, private router: Router, private api: ApiService) {}
+  constructor(public state: AgentStateService, private router: Router, private api: ApiService) {
+    const saved = localStorage.getItem('darkMode');
+    const dark = saved !== null ? saved === 'true' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    this.darkMode.set(dark);
+    this._applyTheme(dark);
+  }
 
   ngOnInit(): void {}
 
@@ -215,6 +222,17 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
 
   historyAsRecord(item: unknown): Record<string, unknown> {
     return item as Record<string, unknown>;
+  }
+
+  toggleDarkMode(): void {
+    const next = !this.darkMode();
+    this.darkMode.set(next);
+    this._applyTheme(next);
+    localStorage.setItem('darkMode', String(next));
+  }
+
+  private _applyTheme(dark: boolean): void {
+    document.documentElement.classList.toggle('ion-palette-dark', dark);
   }
 
   trackByGid(_: number, t: Task): string { return t.task_gid; }
