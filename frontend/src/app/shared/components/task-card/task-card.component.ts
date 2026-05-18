@@ -22,6 +22,8 @@ export class TaskCardComponent implements OnInit {
   availableRepos: Repo[] = [];
   selectedRepoIds: string[] = [];
   classifying = signal(false);
+  copyingBranch = signal(false);
+  copiedBranch = signal('');
 
   constructor(
     private modalCtrl: ModalController,
@@ -148,6 +150,25 @@ export class TaskCardComponent implements OnInit {
       handle: true,
     });
     await modal.present();
+  }
+
+  async onCopyBranch(e: Event): Promise<void> {
+    e.stopPropagation();
+    if (this.copyingBranch()) return;
+    this.copyingBranch.set(true);
+    try {
+      const res = await firstValueFrom(this.api.getBranchName(this.task.task_gid));
+      const branch = res?.branch ?? '';
+      if (branch) {
+        await navigator.clipboard.writeText(branch);
+        this.copiedBranch.set(branch);
+        setTimeout(() => this.copiedBranch.set(''), 2500);
+      }
+    } catch (err) {
+      console.error('[TaskCard] copyBranch failed', err);
+    } finally {
+      this.copyingBranch.set(false);
+    }
   }
 
   async onClassify(e: Event): Promise<void> {
