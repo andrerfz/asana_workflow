@@ -25,7 +25,12 @@ const IDE_OPTIONS = [
 })
 export class SettingsPage implements OnInit {
   readonly activeTab = signal<TabId>('repos');
-  readonly loading = signal(false);
+  // Per-tab loading flags — each tab shows its own spinner
+  readonly loadingRepos = signal(false);
+  readonly loadingMapping = signal(false);
+  readonly loadingAgent = signal(false);
+  readonly loadingGuides = signal(false);
+  readonly loadingWorkflow = signal(false);
 
   // Repos tab
   readonly repos = signal<Repo[]>([]);
@@ -61,30 +66,62 @@ export class SettingsPage implements OnInit {
   constructor(private api: ApiService) {}
 
   async ngOnInit(): Promise<void> {
-    this.loading.set(true);
+    // Fire all fetches in parallel — each tab manages its own loading flag
+    this._loadRepos();
+    this._loadMapping();
+    this._loadAgent();
+    this._loadGuides();
+    this._loadWorkflow();
+  }
+
+  private async _loadRepos(): Promise<void> {
+    this.loadingRepos.set(true);
     try {
-      const [repos, config, settings] = await Promise.all([
+      const [repos, config] = await Promise.all([
         firstValueFrom(this.api.getRepos()),
         firstValueFrom(this.api.getRepoConfig()),
-        firstValueFrom(this.api.getAgentSettings()),
       ]);
       this.repos.set(repos ?? []);
       this.projectsDir.set(config?.projects_dir ?? '');
-      this.settings.set(settings);
-    } catch (e) {
-      console.error('[Settings] init failed', e);
-    } finally {
-      this.loading.set(false);
-    }
+    } catch (e) { console.error('[Settings] loadRepos failed', e); }
+    finally { this.loadingRepos.set(false); }
   }
 
-  setTab(tab: TabId): void {
-    this.activeTab.set(tab);
-    if (tab === 'mapping' && this.areaMap().length === 0) this.loadMapping();
-    if (tab === 'guides' && this.guides().length === 0) this.loadGuides();
-    if (tab === 'agent' && !this.cliStatus()) this.loadCliStatus();
-    if (tab === 'workflow' && !this.workflow()) this.loadWorkflow();
+  private async _loadMapping(): Promise<void> {
+    this.loadingMapping.set(true);
+    try { await this.loadMapping(); }
+    catch (e) { console.error('[Settings] loadMapping failed', e); }
+    finally { this.loadingMapping.set(false); }
   }
+
+  private async _loadAgent(): Promise<void> {
+    this.loadingAgent.set(true);
+    try {
+      const [settings, cli] = await Promise.all([
+        firstValueFrom(this.api.getAgentSettings()),
+        firstValueFrom(this.api.getCliStatus()),
+      ]);
+      this.settings.set(settings);
+      this.cliStatus.set(cli);
+    } catch (e) { console.error('[Settings] loadAgent failed', e); }
+    finally { this.loadingAgent.set(false); }
+  }
+
+  private async _loadGuides(): Promise<void> {
+    this.loadingGuides.set(true);
+    try { await this.loadGuides(); }
+    catch (e) { console.error('[Settings] loadGuides failed', e); }
+    finally { this.loadingGuides.set(false); }
+  }
+
+  private async _loadWorkflow(): Promise<void> {
+    this.loadingWorkflow.set(true);
+    try { await this.loadWorkflow(); }
+    catch (e) { console.error('[Settings] loadWorkflow failed', e); }
+    finally { this.loadingWorkflow.set(false); }
+  }
+
+  setTab(tab: TabId): void { this.activeTab.set(tab); }
 
   // ---- Repos ----
   async scanRepos(): Promise<void> {

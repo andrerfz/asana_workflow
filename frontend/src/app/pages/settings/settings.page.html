@@ -18,13 +18,13 @@
 </ion-header>
 
 <ion-content>
-  <div *ngIf="loading()" class="loading-wrap">
-    <ion-spinner name="crescent"></ion-spinner>
-  </div>
-
   <!-- ========== REPOS TAB ========== -->
-  <ng-container *ngIf="activeTab() === 'repos' && !loading()">
-    <div class="section-header">
+  <ng-container *ngIf="activeTab() === 'repos'">
+    <div *ngIf="loadingRepos()" class="tab-loading">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading repositories...</p>
+    </div>
+    <div class="section-header" *ngIf="!loadingRepos()">
       <p class="projects-dir" *ngIf="projectsDir()">Projects dir: <code>{{ projectsDir() }}</code></p>
       <div class="header-actions">
         <ion-button size="small" fill="outline" [disabled]="scanLoading()" (click)="scanRepos()">
@@ -171,8 +171,9 @@
 
   <!-- ========== MAPPING TAB ========== -->
   <ng-container *ngIf="activeTab() === 'mapping'">
-    <div *ngIf="areaMap().length === 0" class="empty-tab">
+    <div *ngIf="loadingMapping()" class="tab-loading">
       <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading area mapping...</p>
     </div>
     <div class="mapping-list">
       <ion-card *ngFor="let entry of areaMap(); trackBy: trackByArea" class="mapping-card">
@@ -208,8 +209,12 @@
 
   <!-- ========== AGENT TAB ========== -->
   <ng-container *ngIf="activeTab() === 'agent'">
+    <div *ngIf="loadingAgent()" class="tab-loading">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading agent settings...</p>
+    </div>
     <!-- CLI Status -->
-    <ion-card class="cli-status-card" *ngIf="cliStatus()">
+    <ion-card class="cli-status-card" *ngIf="cliStatus() && !loadingAgent()">
       <ion-card-header><ion-card-title>Claude CLI Status</ion-card-title></ion-card-header>
       <ion-card-content>
         <ion-item lines="none">
@@ -271,8 +276,9 @@
 
   <!-- ========== GUIDES TAB ========== -->
   <ng-container *ngIf="activeTab() === 'guides'">
-    <div *ngIf="guides().length === 0" class="empty-tab">
+    <div *ngIf="loadingGuides()" class="tab-loading">
       <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading guides...</p>
     </div>
     <div class="guides-list">
       <ion-card *ngFor="let guide of guides(); trackBy: trackById" class="guide-card">
@@ -305,8 +311,9 @@
 
   <!-- ========== WORKFLOW TAB ========== -->
   <ng-container *ngIf="activeTab() === 'workflow'">
-    <div *ngIf="!workflow()" class="empty-tab">
+    <div *ngIf="loadingWorkflow()" class="tab-loading">
       <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading workflow...</p>
     </div>
     <div *ngIf="workflow()" class="workflow-view">
       <ion-card>
