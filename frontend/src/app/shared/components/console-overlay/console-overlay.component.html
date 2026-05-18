@@ -1,0 +1,58 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title class="console-title">
+      <span class="title-text">{{ taskName() }}</span>
+      <app-phase-badge *ngIf="run()?.phase" [phase]="run()!.phase" size="sm"></app-phase-badge>
+    </ion-title>
+    <ion-buttons slot="end">
+      <ion-button fill="clear" size="small" (click)="clearChat()" title="New chat">
+        <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" size="small" color="danger" (click)="stop()" *ngIf="run()?.is_active">
+        <ion-icon slot="icon-only" name="stop-circle-outline"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" size="small" (click)="close()">
+        <ion-icon slot="icon-only" name="close-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="messages" #msgContainer>
+    <div *ngIf="conversation().length === 0" class="empty-conv">
+      <ion-icon name="chatbubble-ellipses-outline" size="large" color="medium"></ion-icon>
+      <p>Send a message to steer the agent</p>
+    </div>
+    <div
+      *ngFor="let msg of conversation(); trackBy: trackByTs"
+      class="msg"
+      [class.user]="msg.role === 'user'"
+      [class.agent]="msg.role === 'agent'">
+      <div class="msg-bubble">
+        <span class="msg-text">{{ msg.text }}</span>
+        <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
+      </div>
+    </div>
+  </div>
+</ion-content>
+
+<ion-footer>
+  <div class="input-row">
+    <ion-textarea
+      class="msg-input"
+      placeholder="Send a message (Enter to send, Shift+Enter for newline)"
+      [value]="message()"
+      (ionInput)="onInput($event)"
+      (keydown)="onKeydown($event)"
+      rows="2"
+      autoGrow>
+    </ion-textarea>
+    <ion-button
+      fill="solid"
+      [disabled]="sending() || !message().trim()"
+      (click)="send()">
+      <ion-icon slot="icon-only" name="send-outline"></ion-icon>
+    </ion-button>
+  </div>
+</ion-footer>

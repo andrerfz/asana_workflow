@@ -58,6 +58,9 @@
         Stop
       </ion-button>
 
+      <ion-button fill="clear" size="small" color="medium" (click)="onOpenConsole($event)" *ngIf="hasRun" title="Open console">
+        <ion-icon slot="icon-only" name="terminal-outline"></ion-icon>
+      </ion-button>
       <ion-button fill="clear" size="small" color="medium" (click)="onOpen()">
         <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
       </ion-button>

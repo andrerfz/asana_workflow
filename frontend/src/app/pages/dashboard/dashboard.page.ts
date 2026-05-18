@@ -22,6 +22,7 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
 
   readonly viewMode = signal<ViewMode>('cards');
   readonly filterCluster = signal<string | null>(null);
+  readonly filterSection = signal<string | null>(null);
   readonly filterPhase = signal<AgentPhase | 'all' | null>(null);
   readonly filterType = signal<string | null>(null);
   readonly searchQuery = signal('');
@@ -31,6 +32,21 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
   readonly classifying = signal(false);
 
   readonly clusters = Object.entries(CLUSTERS_META).map(([id, meta]) => ({ id, ...meta }));
+
+  readonly sections = computed(() => {
+    const seen = new Set<string>();
+    const result: Array<{ name: string; count: number }> = [];
+    for (const t of this.state.tasks()) {
+      if (t.section_name && !seen.has(t.section_name)) {
+        seen.add(t.section_name);
+        result.push({ name: t.section_name, count: 0 });
+      }
+    }
+    for (const s of result) {
+      s.count = this.state.tasks().filter(t => t.section_name === s.name).length;
+    }
+    return result;
+  });
 
   readonly typeOptions = ['Error', 'Mejora', 'Otros'];
 
@@ -46,11 +62,13 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
   readonly filteredTasks = computed(() => {
     let tasks = [...this.state.tasks()];
     const cluster = this.filterCluster();
+    const section = this.filterSection();
     const phase = this.filterPhase();
     const type = this.filterType();
     const q = this.searchQuery().toLowerCase().trim();
 
     if (cluster) tasks = tasks.filter(t => t.cluster === cluster);
+    if (section) tasks = tasks.filter(t => t.section_name === section);
     if (type) tasks = tasks.filter(t => (t.type ?? '').toLowerCase() === type.toLowerCase());
     if (q) tasks = tasks.filter(t => t.name.toLowerCase().includes(q));
 
@@ -215,6 +233,9 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
   }
 
   setCluster(id: string | null): void { this.filterCluster.set(id); }
+  setSection(name: string | null): void {
+    this.filterSection.set(this.filterSection() === name ? null : name);
+  }
   setPhase(p: AgentPhase | 'all' | null): void { this.filterPhase.set(p); }
   setSort(f: SortField): void { this.sortField.set(f); }
   setType(t: string | null): void { this.filterType.set(t === this.filterType() ? null : t); }

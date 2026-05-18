@@ -4,6 +4,7 @@ import { Task, AgentRun, CLUSTERS_META } from '../../../core/models/task.model';
 import { AgentStateService } from '../../../core/services/agent-state.service';
 import { ApiService, Repo } from '../../../core/services/api.service';
 import { BranchModalComponent, BranchModalResult } from '../branch-modal/branch-modal.component';
+import { ConsoleOverlayComponent } from '../console-overlay/console-overlay.component';
 import { firstValueFrom } from 'rxjs';
 
 @Component({
@@ -134,6 +135,18 @@ export class TaskCardComponent implements OnInit {
     } catch (err) {
       console.error('[TaskCard] onReject failed', err);
     }
+  }
+
+  async onOpenConsole(e: Event): Promise<void> {
+    e.stopPropagation();
+    const modal = await this.modalCtrl.create({
+      component: ConsoleOverlayComponent,
+      componentProps: { taskGid: this.task.task_gid },
+      breakpoints: [0, 0.5, 0.85],
+      initialBreakpoint: 0.85,
+      handle: true,
+    });
+    await modal.present();
   }
 
   onRepoChange(e: CustomEvent): void {

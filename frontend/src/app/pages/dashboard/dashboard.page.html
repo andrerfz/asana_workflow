@@ -98,6 +98,19 @@
     </ion-chip>
   </div>
 
+  <!-- Section filter -->
+  <div class="chip-row" *ngIf="viewMode() !== 'history' && sections().length > 0">
+    <span class="chip-label">Section:</span>
+    <ion-chip [color]="filterSection() === null ? 'primary' : 'medium'" (click)="setSection(null)">All</ion-chip>
+    <ion-chip
+      *ngFor="let s of sections()"
+      [color]="filterSection() === s.name ? 'primary' : 'medium'"
+      (click)="setSection(s.name)">
+      {{ s.name }}
+      <ion-badge>{{ s.count }}</ion-badge>
+    </ion-chip>
+  </div>
+
   <!-- Cluster filter chips -->
   <div class="chip-row" *ngIf="viewMode() !== 'history'">
     <span class="chip-label">Cluster:</span>

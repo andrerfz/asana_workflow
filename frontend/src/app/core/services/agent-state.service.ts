@@ -227,6 +227,15 @@ export class AgentStateService {
     });
   }
 
+  async clearConversation(taskGid: string): Promise<void> {
+    await firstValueFrom(this.http.delete(`/api/agent/chat/${taskGid}`));
+    this.agentRuns.update(runs => {
+      const run = runs[taskGid];
+      if (!run) return runs;
+      return { ...runs, [taskGid]: { ...run, conversation: [] } };
+    });
+  }
+
   async reloadRun(taskGid: string): Promise<void> {
     const run = await firstValueFrom(
       this.http.get<AgentRun>(`/api/agent/status/${taskGid}`)
