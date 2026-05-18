@@ -61,7 +61,9 @@ export class AgentStateService {
 
   private connect(): void {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.ws = new WebSocket(`${proto}//${location.host}/ws/agent`);
+    // Dev server (:4200) can't proxy WebSocket reliably — connect directly to FastAPI
+    const host = location.port === '4200' ? `${location.hostname}:8765` : location.host;
+    this.ws = new WebSocket(`${proto}//${host}/ws/agent`);
 
     this.ws.onopen = () => {
       this.connected.set(true);
