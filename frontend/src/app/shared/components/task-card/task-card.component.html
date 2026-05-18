@@ -2,8 +2,8 @@
 
   <ion-card-header>
     <div class="card-top">
-      <span class="cluster-tag" *ngIf="clusterMeta" [style.background]="clusterColor + '22'" [style.color]="clusterColor">
-        {{ clusterMeta.name }}
+      <span class="cluster-tag" *ngIf="clusterName" [style.background]="clusterColor + '22'" [style.color]="clusterColor">
+        {{ clusterName }}
       </span>
       <span class="scope-tag" *ngIf="scopeLabel">{{ scopeLabel }}</span>
     </div>

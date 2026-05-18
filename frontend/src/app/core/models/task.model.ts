@@ -1,17 +1,25 @@
+export interface TaskCluster {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface Task {
   task_gid: string;
   name: string;
   section_name: string;
   completed: boolean;
   scope_score: number;
-  cluster: string | null;
-  type: string | null;
-  notes: string;
+  cluster: TaskCluster | null;
+  tipo: string | null;
+  canal: string | null;
+  notes?: string;
   priority: number;
   area: string | null;
-  assignee_name?: string;
+  projects?: string[];
+  desarrollador?: string;
   due_on?: string;
-  created_at?: string;
+  rank?: number;
 }
 
 export interface LogEntry {
@@ -70,6 +78,13 @@ export type AgentPhase =
   | 'error'
   | 'paused'
   | 'cancelled';
+
+// Keep for fallback lookups by id
+export const CLUSTER_COLORS: Record<string, string> = {
+  ebitda: '#e74c3c', trazabilidad: '#9b59b6', turnos: '#3498db',
+  pedidos: '#f39c12', almacen: '#1abc9c', sentry: '#95a5a6',
+  integracion: '#e67e22', standalone: '#7f8c8d',
+};
 
 export const PHASE_COLORS: Record<AgentPhase, string> = {
   queued: '#6b7280',

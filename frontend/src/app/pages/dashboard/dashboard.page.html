@@ -117,7 +117,7 @@
     <ion-chip [color]="filterCluster() === null ? 'primary' : 'medium'" (click)="setCluster(null)">All</ion-chip>
     <ion-chip
       *ngFor="let c of clusters"
-      [class.selected-chip]="filterCluster() === c.id"
+      [color]="filterCluster() === c.id ? 'primary' : 'medium'"
       (click)="setCluster(filterCluster() === c.id ? null : c.id)">
       {{ c.name }}
     </ion-chip>
@@ -192,9 +192,9 @@
   <!-- ========== CLUSTER VIEW ========== -->
   <ng-container *ngIf="viewMode() === 'cluster' && !state.loading()">
     <div *ngFor="let group of clusteredTasks(); trackBy: trackByCluster" class="cluster-group">
-      <ion-card class="cluster-header-card">
+      <ion-card class="cluster-header-card" [style.border-left]="'4px solid ' + group.color">
         <ion-card-header>
-          <ion-card-title>{{ group.cluster }}</ion-card-title>
+          <ion-card-title>{{ group.label }}</ion-card-title>
           <ion-card-subtitle>{{ group.items.length }} tasks</ion-card-subtitle>
         </ion-card-header>
       </ion-card>

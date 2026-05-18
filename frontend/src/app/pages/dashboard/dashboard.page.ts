@@ -1,9 +1,9 @@
-import { Component, OnInit, OnDestroy, computed, signal, AfterViewInit, ElementRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, computed, signal, effect, AfterViewInit, ElementRef, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { Router } from '@angular/router';
 import { Chart, registerables } from 'chart.js';
 import { AgentStateService } from '../../core/services/agent-state.service';
 import { ApiService } from '../../core/services/api.service';
-import { Task, AgentPhase, CLUSTERS_META } from '../../core/models/task.model';
+import { Task, AgentPhase, CLUSTERS_META, CLUSTER_COLORS } from '../../core/models/task.model';
 import { firstValueFrom } from 'rxjs';
 
 Chart.register(...registerables);
@@ -48,7 +48,7 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
     return result;
   });
 
-  readonly typeOptions = ['Error', 'Mejora', 'Otros'];
+  readonly typeOptions = ['Error', 'Funcionalidad', 'Mejora', 'Otros'];
 
   readonly phaseOptions: Array<{ value: AgentPhase | 'all'; label: string }> = [
     { value: 'all', label: 'All active' },
@@ -67,9 +67,9 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
     const type = this.filterType();
     const q = this.searchQuery().toLowerCase().trim();
 
-    if (cluster) tasks = tasks.filter(t => t.cluster === cluster);
+    if (cluster) tasks = tasks.filter(t => t.cluster?.id === cluster);
     if (section) tasks = tasks.filter(t => t.section_name === section);
-    if (type) tasks = tasks.filter(t => (t.type ?? '').toLowerCase() === type.toLowerCase());
+    if (type) tasks = tasks.filter(t => (t.tipo ?? '').toLowerCase() === type.toLowerCase());
     if (q) tasks = tasks.filter(t => t.name.toLowerCase().includes(q));
 
     if (phase === 'all') {
@@ -101,13 +101,19 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
 
   readonly clusteredTasks = computed(() => {
     const tasks = this.filteredTasks();
-    const map = new Map<string, Task[]>();
+    const map = new Map<string, { label: string; color: string; items: Task[] }>();
     for (const task of tasks) {
-      const key = task.cluster ?? 'Uncategorized';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(task);
+      const key = task.cluster?.id ?? 'other';
+      if (!map.has(key)) {
+        map.set(key, {
+          label: task.cluster?.name ?? 'Uncategorized',
+          color: task.cluster?.color ?? '#888',
+          items: [],
+        });
+      }
+      map.get(key)!.items.push(task);
     }
-    return Array.from(map.entries()).map(([cluster, items]) => ({ cluster, items }));
+    return Array.from(map.entries()).map(([id, val]) => ({ id, ...val }));
   });
 
   readonly stats = computed(() => {
@@ -124,11 +130,19 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
 
   private chart: Chart | null = null;
 
-  constructor(public state: AgentStateService, private router: Router, private api: ApiService) {
+  constructor(public state: AgentStateService, private router: Router, private api: ApiService, private cdr: ChangeDetectorRef) {
     const saved = localStorage.getItem('darkMode');
     const dark = saved !== null ? saved === 'true' : window.matchMedia('(prefers-color-scheme: dark)').matches;
     this.darkMode.set(dark);
     this._applyTheme(dark);
+
+    // Auto-init chart whenever tasks load and view is cards
+    effect(() => {
+      const tasks = this.state.tasks();
+      if (tasks.length > 0 && this.viewMode() === 'cards') {
+        setTimeout(() => this.initChart(), 50);
+      }
+    });
   }
 
   ngOnInit(): void {}
@@ -146,15 +160,18 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
     if (this.chart) { this.chart.destroy(); this.chart = null; }
 
     const tasks = this.state.tasks();
-    const clusterCounts: Record<string, number> = {};
+    const clusterMap = new Map<string, { label: string; color: string; count: number }>();
     for (const t of tasks) {
-      const key = t.cluster ?? 'other';
-      clusterCounts[key] = (clusterCounts[key] ?? 0) + 1;
+      const key = t.cluster?.id ?? 'other';
+      if (!clusterMap.has(key)) {
+        clusterMap.set(key, { label: t.cluster?.name ?? 'Other', color: t.cluster?.color ?? CLUSTER_COLORS[key] ?? '#888', count: 0 });
+      }
+      clusterMap.get(key)!.count++;
     }
 
-    const labels = Object.keys(clusterCounts).map(k => CLUSTERS_META[k]?.name ?? k);
-    const data = Object.values(clusterCounts);
-    const colors = Object.keys(clusterCounts).map(k => CLUSTERS_META[k]?.color ?? '#999');
+    const labels = Array.from(clusterMap.values()).map(v => v.label);
+    const data = Array.from(clusterMap.values()).map(v => v.count);
+    const colors = Array.from(clusterMap.values()).map(v => v.color);
 
     this.chart = new Chart(this.clusterChartCanvas.nativeElement, {
       type: 'doughnut',
@@ -257,6 +274,6 @@ export class DashboardPage implements OnInit, OnDestroy, AfterViewInit {
   }
 
   trackByGid(_: number, t: Task): string { return t.task_gid; }
-  trackByCluster(_: number, c: { cluster: string }): string { return c.cluster; }
+  trackByCluster(_: number, c: { id: string }): string { return c.id; }
   trackByIdx(i: number): number { return i; }
 }

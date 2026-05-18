@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { ModalController } from '@ionic/angular';
-import { Task, AgentRun, CLUSTERS_META } from '../../../core/models/task.model';
+import { Task, AgentRun } from '../../../core/models/task.model';
 import { AgentStateService } from '../../../core/services/agent-state.service';
 import { ApiService, Repo } from '../../../core/services/api.service';
 import { BranchModalComponent, BranchModalResult } from '../branch-modal/branch-modal.component';
@@ -40,12 +40,12 @@ export class TaskCardComponent implements OnInit {
     this.selectedRepoIds = overrides[this.task.task_gid] ?? [];
   }
 
-  get clusterMeta() {
-    return this.task.cluster ? (CLUSTERS_META[this.task.cluster] ?? null) : null;
+  get clusterColor(): string {
+    return this.task.cluster?.color ?? 'var(--ion-color-medium)';
   }
 
-  get clusterColor(): string {
-    return this.clusterMeta?.color ?? 'var(--ion-color-medium)';
+  get clusterName(): string | null {
+    return this.task.cluster?.name ?? null;
   }
 
   get isRunning(): boolean {
