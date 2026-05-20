@@ -299,8 +299,7 @@ export class WfDashboardPage implements OnInit {
         this.flash('Plan rejected', 'var(--wf-red)');
         break;
       case 'start':
-        this.stateService.startAgent(gid);
-        this.flash('Agent started');
+        this._startWithBranch(gid);
         break;
       case 'stop':
         this.stateService.stopAgent(gid);
@@ -338,6 +337,30 @@ export class WfDashboardPage implements OnInit {
     this.darkMode.set(next);
     localStorage.setItem('wf-dark', String(next));
     document.documentElement.classList.toggle('ion-palette-dark', next);
+  }
+
+  private async _startWithBranch(gid: string): Promise<void> {
+    try {
+      const { slug, suggestions } = await this.stateService.startAgentWithBranch(gid);
+      if (!slug) {
+        // No AI branch name — prompt user for one
+        const name = prompt('Branch slug (leave empty to auto-generate):') ?? '';
+        await this.stateService.confirmStart(gid, name || gid.slice(-8), null);
+      } else if (suggestions.length > 0) {
+        // Existing branches found — let user pick via confirm
+        const list = suggestions.map((s, i) => `${i + 1}. ${s.branch} (${s.author})`).join('\n');
+        const pick = prompt(`Existing branches found:\n${list}\n\nEnter number to continue from, or leave empty for fresh branch:`);
+        const idx = pick ? parseInt(pick, 10) - 1 : -1;
+        const base = idx >= 0 ? suggestions[idx]?.branch ?? null : null;
+        await this.stateService.confirmStart(gid, slug, base);
+      } else {
+        await this.stateService.confirmStart(gid, slug, null);
+      }
+      this.flash('Agent started');
+    } catch (e) {
+      console.error('[Dashboard] startWithBranch failed', e);
+      this.flash('Failed to start agent', 'var(--wf-red)');
+    }
   }
 
   onClassify(): void {
