@@ -634,6 +634,12 @@ ion-router-outlet:has(app-wf-dashboard) {
   display: flex;
   gap: 6px;
   align-items: stretch;
+  width: 100%;
+}
+
+.wf-chart-wrap .wf-barchart {
+  flex: 1;
+  min-width: 0;
 }
 
 .wf-chart-yaxis {
