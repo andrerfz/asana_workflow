@@ -167,7 +167,7 @@ const BUSY_ACTIONS: Record<string, number> = {
                         @if (ph.id === 'awaiting_approval' && task()!.plan) {
                           <div class="wf-d-card is-warn">
                             <div class="wf-d-card-h" style="color:var(--wf-amber)">Plan · awaiting approval</div>
-                            <p>{{ task()!.plan }}</p>
+                            <pre class="wf-plan-text">{{ task()!.plan }}</pre>
                           </div>
                           <div class="wf-d-acts">
                             <button class="wf-btn wf-btn-warn" (click)="action.emit('approve')">Approve · proceed to coding</button>
@@ -288,8 +288,8 @@ export class WfDrawerComponent {
     const startX = e.clientX;
     const root = document.querySelector('.wf-root') as HTMLElement;
     const startW = parseInt(getComputedStyle(root).getPropertyValue('--wf-drawer') || '380', 10);
-    const maxW = Math.round(window.innerWidth * 0.30);
-    const minW = 280;
+    const maxW = Math.round(window.innerWidth * 0.70);
+    const minW = 320;
 
     const onMove = (mv: MouseEvent) => {
       const delta = startX - mv.clientX; // drag left = wider

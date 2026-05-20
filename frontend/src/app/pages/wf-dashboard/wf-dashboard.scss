@@ -19,6 +19,7 @@ ion-router-outlet:has(app-wf-dashboard) {
   position: fixed;
   inset: 0;
   z-index: 100;
+  --wf-drawer: 50vw;   /* default: drawer takes half the viewport */
 }
 
 /*
@@ -1239,6 +1240,20 @@ select.wf-input { cursor: pointer; }
     border-color: var(--wf-accent);
     background: var(--wf-accent-soft);
   }
+}
+
+.wf-plan-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--wf-text-soft);
+  background: var(--wf-bg);
+  border-radius: var(--wf-rad-sm);
+  padding: 10px 12px;
+  margin: 0;
+  overflow-x: auto;
 }
 
 .wf-guide-textarea {

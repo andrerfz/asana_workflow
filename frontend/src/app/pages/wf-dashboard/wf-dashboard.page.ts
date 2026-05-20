@@ -175,6 +175,39 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         </div>
       }
 
+      <!-- ── REVISE OVERLAY ── -->
+      @if (reviseOverlay()) {
+        <div class="wf-branch-overlay" (click)="reviseClose()">
+          <div class="wf-branch-panel" (click)="$event.stopPropagation()">
+            <div class="wf-branch-head">
+              <span>Revise plan</span>
+              <button class="wf-btn wf-btn-icon" (click)="reviseClose()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="wf-branch-section">
+              <div class="wf-branch-section-lbl">Describe what needs to change in the plan</div>
+              <textarea
+                #reviseInput
+                class="wf-guide-textarea"
+                placeholder="e.g. The plan should also update the tests. Don't touch the Provider model."
+                rows="4"
+                (input)="reviseMessage.set($any($event.target).value)"
+                (keydown.meta.enter)="reviseSendFrom(reviseInput)">
+              </textarea>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="wf-btn" style="flex:1" [disabled]="reviseSending()" (click)="reviseClose()">Cancel</button>
+                <button class="wf-btn wf-btn-warn" style="flex:2"
+                  [disabled]="reviseSending()"
+                  (click)="reviseSendFrom(reviseInput)">
+                  {{ reviseSending() ? 'Sending…' : 'Request revision ⌘↵' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- ── GUIDE OVERLAY ── -->
       @if (guideOverlay()) {
         <div class="wf-branch-overlay" (click)="guideClose()">
@@ -255,6 +288,11 @@ export class WfDashboardPage implements OnInit {
   guideOverlay = signal<{ gid: string } | null>(null);
   guideMessage = signal('');
   guideSending = signal(false);
+
+  // Inline revise overlay
+  reviseOverlay = signal<{ gid: string } | null>(null);
+  reviseMessage = signal('');
+  reviseSending = signal(false);
 
 
   // All tasks merged with run data
@@ -376,6 +414,30 @@ export class WfDashboardPage implements OnInit {
     }
   }
 
+  reviseClose(): void {
+    this.reviseOverlay.set(null);
+    this.reviseMessage.set('');
+  }
+
+  async reviseSendFrom(input: HTMLTextAreaElement): Promise<void> {
+    const msg = input.value.trim();
+    const gid = this.reviseOverlay()?.gid;
+    if (!msg || !gid || this.reviseSending()) return;
+    this.reviseSending.set(true);
+    input.disabled = true;
+    try {
+      await this.stateService.answerQuestion(gid, `revise:${msg}`);
+      this.flash('Revision feedback sent — agent will adjust the plan');
+      this.reviseClose();
+    } catch (e) {
+      console.error('[Revise] send failed', e);
+      this.flash('Failed to send revision', 'var(--wf-red)');
+      input.disabled = false;
+    } finally {
+      this.reviseSending.set(false);
+    }
+  }
+
   private _showBranchModal(gid: string, slug: string, suggestions: { branch: string; author: string }[]): Promise<string | null | 'cancel'> {
     return new Promise(resolve => {
       this._branchResolve = resolve;
@@ -453,6 +515,10 @@ export class WfDashboardPage implements OnInit {
       case 'guide':
         this.guideMessage.set('');
         this.guideOverlay.set({ gid });
+        break;
+      case 'revise':
+        this.reviseMessage.set('');
+        this.reviseOverlay.set({ gid });
         break;
       case 'classify':
         this.api.classifyTask(gid).subscribe();
