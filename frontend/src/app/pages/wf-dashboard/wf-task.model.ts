@@ -22,6 +22,8 @@ export interface WfTask {
   section: string;
   cluster: { id: string; name: string; color: string } | null;
   tipo: string | null;
+  canal: string | null;
+  area: string | null;
   scope: number;
   priority: number;
   notes: string;
@@ -46,6 +48,8 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     section: task.section_name,
     cluster: task.cluster ? { id: task.cluster.id, name: task.cluster.name, color: task.cluster.color } : null,
     tipo: task.tipo,
+    canal: task.canal ?? null,
+    area: task.area ?? null,
     scope: task.scope_score,
     priority: task.priority,
     notes: task.notes ?? '',

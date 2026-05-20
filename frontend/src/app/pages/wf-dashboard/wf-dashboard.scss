@@ -1153,6 +1153,33 @@ select.wf-input { cursor: pointer; }
   cursor: not-allowed;
 }
 
+/* Classify button — classified state */
+.wf-d-abtn.is-classified {
+  color: var(--wf-green);
+  border-color: color-mix(in srgb, var(--wf-green) 30%, transparent);
+  background: color-mix(in srgb, var(--wf-green) 8%, transparent);
+}
+
+/* Classification block in drawer */
+.wf-classif-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.wf-classif-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wf-green) 14%, transparent);
+  color: var(--wf-green);
+  &.is-missing {
+    background: color-mix(in srgb, var(--wf-text-dim) 14%, transparent);
+    color: var(--wf-text-mute);
+  }
+}
+
 /* Keep ibtn for any remaining icon-only usage */
 .wf-d-ibtn {
   all: unset; cursor: pointer;

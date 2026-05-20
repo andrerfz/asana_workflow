@@ -1,4 +1,5 @@
 import { Component, ChangeDetectionStrategy, input, output, signal, ViewEncapsulation, computed } from '@angular/core';
+import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model';
 
 // Actions that show a loading state and block re-click
 const BUSY_ACTIONS: Record<string, number> = {
@@ -7,7 +8,6 @@ const BUSY_ACTIONS: Record<string, number> = {
   ide: 1500,       // open command — ~1s
   asana: 1000,     // open link — instant
 };
-import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model';
 
 @Component({
   selector: 'app-wf-drawer',
@@ -44,9 +44,17 @@ import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M17 7H8m9 0v9"/></svg>
                 Asana
               </button>
-              <button class="wf-d-abtn" [disabled]="busy('classify')" (click)="trigger('classify')">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.8 5.8 1.9-5.8 1.9L12 18.4l-1.9-5.8-5.8-1.9 5.8-1.9L12 3z"/></svg>
-                {{ busy('classify') ? 'Classifying…' : 'Classify' }}
+              <button class="wf-d-abtn" [class.is-classified]="isClassified() && !busy('classify')" [disabled]="busy('classify')" (click)="trigger('classify')">
+                @if (busy('classify')) {
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:wf-spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>
+                  Classifying…
+                } @else if (isClassified()) {
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg>
+                  Classified
+                } @else {
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.8 5.8 1.9-5.8 1.9L12 18.4l-1.9-5.8-5.8-1.9 5.8-1.9L12 3z"/></svg>
+                  Classify
+                }
               </button>
             </div>
           </div>
@@ -69,6 +77,64 @@ import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model
               <p>{{ task()!.notes }}</p>
             </div>
           }
+
+          <!-- Classification block -->
+          <div class="wf-d-card wf-d-classif" style="margin-top:12px">
+            <div class="wf-d-card-h" style="display:flex;align-items:center;justify-content:space-between">
+              <span>Classification</span>
+              @if (isClassified()) {
+                <span class="wf-classif-badge">✓ classified</span>
+              } @else {
+                <span class="wf-classif-badge is-missing">not classified</span>
+              }
+            </div>
+            <div class="wf-classif-grid">
+              <div class="wf-kv-row">
+                <div class="wf-kv-k">Cluster</div>
+                <div class="wf-kv-v">
+                  @if (task()!.cluster) {
+                    <span class="wf-d-tag" [style.background]="task()!.cluster!.color + '22'" [style.color]="task()!.cluster!.color" style="font-size:11px;padding:2px 7px">
+                      {{ task()!.cluster!.name }}
+                    </span>
+                  } @else { <span style="color:var(--wf-text-dim)">—</span> }
+                </div>
+              </div>
+              <div class="wf-kv-row">
+                <div class="wf-kv-k">Type</div>
+                <div class="wf-kv-v">
+                  @if (task()!.tipo) {
+                    <span class="wf-tag">{{ task()!.tipo }}</span>
+                  } @else { <span style="color:var(--wf-text-dim)">—</span> }
+                </div>
+              </div>
+              <div class="wf-kv-row">
+                <div class="wf-kv-k">Canal</div>
+                <div class="wf-kv-v">{{ task()!.canal || '—' }}</div>
+              </div>
+              <div class="wf-kv-row">
+                <div class="wf-kv-k">Area</div>
+                <div class="wf-kv-v wf-mono" style="font-size:11px">{{ task()!.area || '—' }}</div>
+              </div>
+              <div class="wf-kv-row">
+                <div class="wf-kv-k">Scope</div>
+                <div class="wf-kv-v"><span class="wf-tag wf-tag-scope">S{{ task()!.scope }}</span></div>
+              </div>
+              <div class="wf-kv-row">
+                <div class="wf-kv-k">Priority</div>
+                <div class="wf-kv-v wf-mono">P{{ task()!.priority }}</div>
+              </div>
+              @if (task()!.projects?.length) {
+                <div class="wf-kv-row">
+                  <div class="wf-kv-k">Projects</div>
+                  <div class="wf-kv-v" style="display:flex;gap:4px;flex-wrap:wrap">
+                    @for (p of task()!.projects!; track p) {
+                      <span class="wf-tag">{{ p }}</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
 
           <div class="wf-d-card-h" style="margin-top:14px; padding-left:0">Workflow</div>
           <div class="wf-trail">
@@ -208,6 +274,11 @@ export class WfDrawerComponent {
   action = output<string>();
 
   phases = WF_PHASES;
+
+  readonly isClassified = computed(() => {
+    const t = this.task();
+    return !!(t?.cluster && t?.tipo && t?.scope);
+  });
 
   private _busy = signal<Set<string>>(new Set());
 
