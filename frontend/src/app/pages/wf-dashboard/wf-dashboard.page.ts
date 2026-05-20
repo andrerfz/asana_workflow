@@ -175,6 +175,40 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         </div>
       }
 
+      <!-- ── GUIDE OVERLAY ── -->
+      @if (guideOverlay()) {
+        <div class="wf-branch-overlay" (click)="guideClose()">
+          <div class="wf-branch-panel" (click)="$event.stopPropagation()">
+            <div class="wf-branch-head">
+              <span>Guide agent</span>
+              <button class="wf-btn wf-btn-icon" (click)="guideClose()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="wf-branch-section">
+              <div class="wf-branch-section-lbl">Send a steering message to the running agent</div>
+              <textarea
+                class="wf-guide-textarea"
+                placeholder="e.g. Focus on the test failure in InvoiceTest.php, ignore the other errors for now"
+                rows="4"
+                [value]="guideMessage()"
+                (input)="guideMessage.set($any($event.target).value)"
+                (keydown.meta.enter)="guideSend()"
+                autofocus>
+              </textarea>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="wf-btn" style="flex:1" (click)="guideClose()">Cancel</button>
+                <button class="wf-btn wf-btn-primary" style="flex:2"
+                  [disabled]="guideSending() || !guideMessage().trim()"
+                  (click)="guideSend()">
+                  {{ guideSending() ? 'Sending…' : 'Send ⌘↵' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- ── TOAST ── -->
       @if (toast()) {
         <div class="wf-toast">
@@ -217,6 +251,11 @@ export class WfDashboardPage implements OnInit {
   // Inline branch selection overlay
   branchModal = signal<{ gid: string; slug: string; suggestions: { branch: string; author: string }[] } | null>(null);
   private _branchResolve: ((base: string | null | 'cancel') => void) | null = null;
+
+  // Inline guide overlay
+  guideOverlay = signal<{ gid: string } | null>(null);
+  guideMessage = signal('');
+  guideSending = signal(false);
 
 
   // All tasks merged with run data
@@ -314,6 +353,28 @@ export class WfDashboardPage implements OnInit {
     return WF_PHASE_BY_ID[phase as string]?.label ?? String(phase ?? '—');
   }
 
+  guideClose(): void {
+    this.guideOverlay.set(null);
+    this.guideMessage.set('');
+  }
+
+  async guideSend(): Promise<void> {
+    const msg = this.guideMessage().trim();
+    const gid = this.guideOverlay()?.gid;
+    if (!msg || !gid || this.guideSending()) return;
+    this.guideSending.set(true);
+    try {
+      await this.stateService.sendGuideMessage(gid, msg);
+      this.flash('Guide message sent to agent');
+      this.guideClose();
+    } catch (e) {
+      console.error('[Guide] send failed', e);
+      this.flash('Failed to send message', 'var(--wf-red)');
+    } finally {
+      this.guideSending.set(false);
+    }
+  }
+
   private _showBranchModal(gid: string, slug: string, suggestions: { branch: string; author: string }[]): Promise<string | null | 'cancel'> {
     return new Promise(resolve => {
       this._branchResolve = resolve;
@@ -387,6 +448,10 @@ export class WfDashboardPage implements OnInit {
       case 'stop':
         this.stateService.stopAgent(gid);
         this.flash('Agent stopped', 'var(--wf-amber)');
+        break;
+      case 'guide':
+        this.guideMessage.set('');
+        this.guideOverlay.set({ gid });
         break;
       case 'classify':
         this.api.classifyTask(gid).subscribe();

@@ -1241,6 +1241,24 @@ select.wf-input { cursor: pointer; }
   }
 }
 
+.wf-guide-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--wf-bg-sub);
+  border: 1px solid var(--wf-border);
+  border-radius: var(--wf-rad);
+  color: var(--wf-text);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+  transition: border-color .12s;
+  &:focus { border-color: var(--wf-accent); }
+  &::placeholder { color: var(--wf-text-dim); }
+}
+
 .wf-branch-slug-hint {
   font-size: 10px;
   color: var(--wf-text-mute);
