@@ -22,6 +22,7 @@ import { WfCardsComponent } from './wf-cards/wf-cards.component';
 import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
 import { firstValueFrom } from 'rxjs';
+import { WfSettingsComponent } from './wf-settings/wf-settings.component';
 
 @Component({
   selector: 'app-wf-dashboard',
@@ -36,6 +37,7 @@ import { firstValueFrom } from 'rxjs';
     WfListComponent,
     WfCardsComponent,
     WfDrawerComponent,
+    WfSettingsComponent,
     DatePipe,
   ],
   template: `
@@ -141,14 +143,10 @@ import { firstValueFrom } from 'rxjs';
         </main>
       }
 
-      <!-- ── SETTINGS ── (navigate to dedicated settings page) -->
+      <!-- ── SETTINGS ── (inline, no page navigation) -->
       @if (mode() === 'settings') {
         <main class="wf-main wf-full-col">
-          <div style="padding:40px 32px">
-            <div style="font-size:16px; font-weight:600; margin-bottom:8px">Settings</div>
-            <div style="color:var(--wf-text-mute); margin-bottom:24px">Configure repositories, IDE, area mapping, agent behaviour and guides.</div>
-            <button class="wf-btn wf-btn-go" (click)="goToSettings()">Open Settings →</button>
-          </div>
+          <app-wf-settings/>
         </main>
       }
 
@@ -297,10 +295,6 @@ export class WfDashboardPage implements OnInit {
       } catch { /* ignore */ }
       finally { this.historyLoading.set(false); }
     }
-  }
-
-  goToSettings(): void {
-    this.router.navigate(['/settings']);
   }
 
   onWorkspaceChange(ws: string): void {
