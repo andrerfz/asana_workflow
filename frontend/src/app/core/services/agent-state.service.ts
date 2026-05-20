@@ -216,7 +216,7 @@ export class AgentStateService {
 
   async sendGuideMessage(taskGid: string, message: string): Promise<void> {
     await firstValueFrom(
-      this.http.post(`/api/agent/guide/${taskGid}`, { message })
+      this.http.post(`/api/agent/guide/${taskGid}`, { feedback: message })
     );
   }
 

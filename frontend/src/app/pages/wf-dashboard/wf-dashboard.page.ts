@@ -188,19 +188,18 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
             <div class="wf-branch-section">
               <div class="wf-branch-section-lbl">Send a steering message to the running agent</div>
               <textarea
+                #guideInput
                 class="wf-guide-textarea"
                 placeholder="e.g. Focus on the test failure in InvoiceTest.php, ignore the other errors for now"
                 rows="4"
-                [value]="guideMessage()"
                 (input)="guideMessage.set($any($event.target).value)"
-                (keydown.meta.enter)="guideSend()"
-                autofocus>
+                (keydown.meta.enter)="guideSendFrom(guideInput)">
               </textarea>
               <div style="display:flex;gap:8px;margin-top:8px">
-                <button class="wf-btn" style="flex:1" (click)="guideClose()">Cancel</button>
+                <button class="wf-btn" style="flex:1" [disabled]="guideSending()" (click)="guideClose()">Cancel</button>
                 <button class="wf-btn wf-btn-primary" style="flex:2"
-                  [disabled]="guideSending() || !guideMessage().trim()"
-                  (click)="guideSend()">
+                  [disabled]="guideSending()"
+                  (click)="guideSendFrom(guideInput)">
                   {{ guideSending() ? 'Sending…' : 'Send ⌘↵' }}
                 </button>
               </div>
@@ -358,11 +357,12 @@ export class WfDashboardPage implements OnInit {
     this.guideMessage.set('');
   }
 
-  async guideSend(): Promise<void> {
-    const msg = this.guideMessage().trim();
+  async guideSendFrom(input: HTMLTextAreaElement): Promise<void> {
+    const msg = input.value.trim();
     const gid = this.guideOverlay()?.gid;
     if (!msg || !gid || this.guideSending()) return;
     this.guideSending.set(true);
+    input.disabled = true;
     try {
       await this.stateService.sendGuideMessage(gid, msg);
       this.flash('Guide message sent to agent');
@@ -370,6 +370,7 @@ export class WfDashboardPage implements OnInit {
     } catch (e) {
       console.error('[Guide] send failed', e);
       this.flash('Failed to send message', 'var(--wf-red)');
+      input.disabled = false;
     } finally {
       this.guideSending.set(false);
     }
