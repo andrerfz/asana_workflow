@@ -23,6 +23,7 @@ import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
 import { firstValueFrom } from 'rxjs';
 import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.component';
+import { WfHistoryComponent } from './wf-history/wf-history.component';
 
 @Component({
   selector: 'app-wf-dashboard',
@@ -38,6 +39,7 @@ import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.com
     WfCardsComponent,
     WfDrawerComponent,
     WfSettingsComponent,
+    WfHistoryComponent,
     DatePipe,
   ],
   template: `
@@ -111,35 +113,7 @@ import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.com
       <!-- ── HISTORY ── -->
       @if (mode() === 'history') {
         <main class="wf-main wf-full-col">
-          @if (historyLoading()) {
-            <div class="wf-empty" style="padding:40px">Loading history…</div>
-          } @else {
-            <div class="wf-cols-h">
-              <div>Task</div><div>Phase</div><div>Cost</div><div>Started</div><div>Duration</div>
-            </div>
-            <div class="wf-list">
-              @if (historyItems().length === 0) {
-                <div class="wf-empty">No completed runs yet</div>
-              }
-              @for (run of historyItems(); track run['task_gid']) {
-                <div class="wf-row" (click)="selected.set($any(run['task_gid'])); mode.set('tasks')">
-                  <div class="wf-row-task">
-                    <span class="wf-row-cdot" style="background:var(--wf-accent)"></span>
-                    <div class="wf-row-task-main">
-                      <div class="wf-row-title">{{ run['task_name'] || run['task_gid'] }}</div>
-                    </div>
-                  </div>
-                  <div class="wf-row-phase">
-                    <span class="wf-phase-dot" [style.background]="phaseColor(run['phase'])"></span>
-                    <span class="wf-phase-l">{{ phaseLabel(run['phase']) }}</span>
-                  </div>
-                  <div class="wf-row-cost wf-mono">{{ run['cost_usd'] ? ('$' + (+run['cost_usd']).toFixed(3)) : '—' }}</div>
-                  <div class="wf-row-repo wf-mono" style="font-size:11px">{{ run['started_at'] ? ($any(run['started_at']) | date:'short') : '—' }}</div>
-                  <div class="wf-row-repo wf-mono" style="font-size:11px">{{ run['duration_seconds'] ? (run['duration_seconds'] + 's') : '—' }}</div>
-                </div>
-              }
-            </div>
-          }
+          <app-wf-history/>
         </main>
       }
 
@@ -186,9 +160,6 @@ export class WfDashboardPage implements OnInit {
   toast = signal<{ text: string; color: string } | null>(null);
   private _toastTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // History
-  historyItems = signal<Record<string, unknown>[]>([]);
-  historyLoading = signal(false);
 
   // All tasks merged with run data
   allWfTasks = computed<WfTask[]>(() => {
@@ -285,16 +256,8 @@ export class WfDashboardPage implements OnInit {
     return WF_PHASE_BY_ID[phase as string]?.label ?? String(phase ?? '—');
   }
 
-  async onModeChange(mode: string): Promise<void> {
+  onModeChange(mode: string): void {
     this.mode.set(mode);
-    if (mode === 'history' && this.historyItems().length === 0) {
-      this.historyLoading.set(true);
-      try {
-        const res = await firstValueFrom(this.api.getAgentHistory());
-        this.historyItems.set((res?.runs ?? []) as Record<string, unknown>[]);
-      } catch { /* ignore */ }
-      finally { this.historyLoading.set(false); }
-    }
   }
 
   onWorkspaceChange(ws: string): void {

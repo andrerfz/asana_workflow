@@ -599,6 +599,13 @@ ion-router-outlet:has(app-wf-dashboard) {
   gap: 10px;
 }
 
+.wf-hist-trend {
+  font-size: 10.5px;
+  color: var(--wf-text-mute);
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
 .wf-hist-chart {
   background: var(--wf-bg-card);
   border: 1px solid var(--wf-border);
