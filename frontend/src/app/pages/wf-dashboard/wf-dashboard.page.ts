@@ -23,6 +23,8 @@ import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
 import { firstValueFrom } from 'rxjs';
 import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.component';
+import { BranchModalComponent, BranchModalResult } from '../../shared/components/branch-modal/branch-modal.component';
+import { ModalController } from '@ionic/angular';
 import { WfHistoryComponent } from './wf-history/wf-history.component';
 
 @Component({
@@ -139,6 +141,7 @@ export class WfDashboardPage implements OnInit {
   protected stateService = inject(AgentStateService);
   private api = inject(ApiService);
   private router = inject(Router);
+  private modalCtrl = inject(ModalController);
 
   // UI state signals
   mode = signal<string>('tasks');
@@ -342,20 +345,23 @@ export class WfDashboardPage implements OnInit {
   private async _startWithBranch(gid: string): Promise<void> {
     try {
       const { slug, suggestions } = await this.stateService.startAgentWithBranch(gid);
-      if (!slug) {
-        // No AI branch name — prompt user for one
-        const name = prompt('Branch slug (leave empty to auto-generate):') ?? '';
-        await this.stateService.confirmStart(gid, name || gid.slice(-8), null);
-      } else if (suggestions.length > 0) {
-        // Existing branches found — let user pick via confirm
-        const list = suggestions.map((s, i) => `${i + 1}. ${s.branch} (${s.author})`).join('\n');
-        const pick = prompt(`Existing branches found:\n${list}\n\nEnter number to continue from, or leave empty for fresh branch:`);
-        const idx = pick ? parseInt(pick, 10) - 1 : -1;
-        const base = idx >= 0 ? suggestions[idx]?.branch ?? null : null;
-        await this.stateService.confirmStart(gid, slug, base);
+
+      if (suggestions.length > 0 || slug) {
+        const modal = await this.modalCtrl.create({
+          component: BranchModalComponent,
+          componentProps: { taskGid: gid, branchSlug: slug, suggestions },
+          breakpoints: [0, 0.75, 1],
+          initialBreakpoint: 0.75,
+        });
+        await modal.present();
+        const { data } = await modal.onWillDismiss<BranchModalResult | null>();
+        if (!data) return; // cancelled
+        await this.stateService.confirmStart(gid, slug, data.baseBranch);
       } else {
-        await this.stateService.confirmStart(gid, slug, null);
+        // No slug and no suggestions — start with gid suffix as fallback slug
+        await this.stateService.confirmStart(gid, gid.slice(-8), null);
       }
+
       this.flash('Agent started');
     } catch (e) {
       console.error('[Dashboard] startWithBranch failed', e);
