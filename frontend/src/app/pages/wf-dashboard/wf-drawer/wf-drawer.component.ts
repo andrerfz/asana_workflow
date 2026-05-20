@@ -224,7 +224,7 @@ const BUSY_ACTIONS: Record<string, number> = {
                           <div class="wf-d-card" style="margin-top:14px">
                             <div class="wf-d-card-h">Queued</div>
                             <div class="wf-d-acts">
-                              <button class="wf-btn wf-btn-primary" (click)="action.emit('start')">Start now</button>
+                              <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? "Starting…" : "Start now" }}</button>
                             </div>
                           </div>
                         }
@@ -252,7 +252,7 @@ const BUSY_ACTIONS: Record<string, number> = {
             <div class="wf-d-card" style="margin-top:14px">
               <div class="wf-d-card-h">Queued</div>
               <div class="wf-d-acts">
-                <button class="wf-btn wf-btn-primary" (click)="action.emit('start')">Start now</button>
+                <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? "Starting…" : "Start now" }}</button>
               </div>
             </div>
           }
@@ -278,6 +278,7 @@ const BUSY_ACTIONS: Record<string, number> = {
 })
 export class WfDrawerComponent {
   task = input<WfTask | null>(null);
+  isStarting = input<boolean>(false);
   action = output<string>();
 
   phases = WF_PHASES;

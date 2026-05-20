@@ -95,6 +95,7 @@ import { WfAction } from '../wf-list/wf-list.component';
 export class WfCardsComponent {
   tasks = input<WfTask[]>([]);
   selected = input<string | null>(null);
+  startingGids = input<Set<string>>(new Set());
 
   selectedChange = output<string>();
   action = output<WfAction>();

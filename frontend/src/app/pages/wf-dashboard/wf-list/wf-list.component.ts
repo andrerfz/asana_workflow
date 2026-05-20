@@ -78,7 +78,7 @@ export interface WfAction {
               </button>
             }
             @if (task.phase === 'queued') {
-              <button class="wf-row-mini is-go" aria-label="Start agent" (click)="emitAction($event, task.gid, 'start')">
+              <button class="wf-row-mini is-go" aria-label="Start agent" [disabled]="startingGids().has(task.gid)" (click)="emitAction($event, task.gid, 'start')">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               </button>
             }
@@ -99,6 +99,7 @@ export interface WfAction {
 export class WfListComponent {
   tasks = input<WfTask[]>([]);
   selected = input<string | null>(null);
+  startingGids = input<Set<string>>(new Set());
 
   selectedChange = output<string>();
   action = output<WfAction>();

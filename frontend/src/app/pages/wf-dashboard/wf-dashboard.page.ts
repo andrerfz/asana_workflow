@@ -94,6 +94,7 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
             <app-wf-list
               [tasks]="filteredTasks()"
               [selected]="selected()"
+              [startingGids]="startingGids()"
               (selectedChange)="selected.set($event)"
               (action)="onAction($event)"
             />
@@ -101,6 +102,7 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
             <app-wf-cards
               [tasks]="filteredTasks()"
               [selected]="selected()"
+              [startingGids]="startingGids()"
               (selectedChange)="selected.set($event)"
               (action)="onAction($event)"
             />
@@ -108,6 +110,7 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         </main>
         <app-wf-drawer
           [task]="selectedTask()"
+          [isStarting]="startingGids().has(selected() ?? '')"
           (action)="onDrawerAction($event)"
         />
       }
@@ -162,6 +165,9 @@ export class WfDashboardPage implements OnInit {
   // Toast
   toast = signal<{ text: string; color: string } | null>(null);
   private _toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Per-task start loading state
+  startingGids = signal<Set<string>>(new Set());
 
 
   // All tasks merged with run data
@@ -343,15 +349,19 @@ export class WfDashboardPage implements OnInit {
   }
 
   private async _startWithBranch(gid: string): Promise<void> {
+    if (this.startingGids().has(gid)) return;
+    this.startingGids.update(s => new Set([...s, gid]));
     try {
       const { slug, suggestions } = await this.stateService.startAgentWithBranch(gid);
 
       if (suggestions.length > 0 || slug) {
+        const isDark = this.darkMode();
         const modal = await this.modalCtrl.create({
           component: BranchModalComponent,
           componentProps: { taskGid: gid, branchSlug: slug, suggestions },
           breakpoints: [0, 0.75, 1],
           initialBreakpoint: 0.75,
+          cssClass: isDark ? 'ion-palette-dark' : '',
         });
         await modal.present();
         const { data } = await modal.onWillDismiss<BranchModalResult | null>();
@@ -366,6 +376,8 @@ export class WfDashboardPage implements OnInit {
     } catch (e) {
       console.error('[Dashboard] startWithBranch failed', e);
       this.flash('Failed to start agent', 'var(--wf-red)');
+    } finally {
+      this.startingGids.update(s => { const n = new Set(s); n.delete(gid); return n; });
     }
   }
 
