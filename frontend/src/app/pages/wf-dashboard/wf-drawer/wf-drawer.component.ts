@@ -1,4 +1,12 @@
-import { Component, ChangeDetectionStrategy, input, output, ViewEncapsulation, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, signal, ViewEncapsulation, computed } from '@angular/core';
+
+// Actions that show a loading state and block re-click
+const BUSY_ACTIONS: Record<string, number> = {
+  branch: 3000,    // API call + clipboard — ~2s
+  classify: 5000,  // AI call — ~4s
+  ide: 1500,       // open command — ~1s
+  asana: 1000,     // open link — instant
+};
 import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model';
 
 @Component({
@@ -24,17 +32,21 @@ import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model
               </span>
             }
             <div class="wf-d-actions">
-              <button class="wf-d-ibtn" aria-label="Open in IDE" (click)="action.emit('ide')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              <button class="wf-d-abtn" [disabled]="busy('ide')" (click)="trigger('ide')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                IDE
               </button>
-              <button class="wf-d-ibtn" aria-label="Generate branch name" (click)="action.emit('branch')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M6 18a9 9 0 0 0 9-9v3"/></svg>
+              <button class="wf-d-abtn" [disabled]="busy('branch')" (click)="trigger('branch')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M6 18a9 9 0 0 0 9-9v3"/></svg>
+                {{ busy('branch') ? 'Copying…' : 'Branch' }}
               </button>
-              <button class="wf-d-ibtn" aria-label="Open in Asana" (click)="action.emit('asana')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M17 7H8m9 0v9"/></svg>
+              <button class="wf-d-abtn" [disabled]="busy('asana')" (click)="trigger('asana')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M17 7H8m9 0v9"/></svg>
+                Asana
               </button>
-              <button class="wf-d-ibtn" aria-label="Classify" (click)="action.emit('classify')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.8 5.8 1.9-5.8 1.9L12 18.4l-1.9-5.8-5.8-1.9 5.8-1.9L12 3z"/></svg>
+              <button class="wf-d-abtn" [disabled]="busy('classify')" (click)="trigger('classify')">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.8 5.8 1.9-5.8 1.9L12 18.4l-1.9-5.8-5.8-1.9 5.8-1.9L12 3z"/></svg>
+                {{ busy('classify') ? 'Classifying…' : 'Classify' }}
               </button>
             </div>
           </div>
@@ -193,10 +205,25 @@ import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model
 })
 export class WfDrawerComponent {
   task = input<WfTask | null>(null);
-
   action = output<string>();
 
   phases = WF_PHASES;
+
+  private _busy = signal<Set<string>>(new Set());
+
+  busy(act: string): boolean {
+    return this._busy().has(act);
+  }
+
+  trigger(act: string): void {
+    if (this.busy(act)) return;
+    const ms = BUSY_ACTIONS[act];
+    if (ms) {
+      this._busy.update(s => new Set([...s, act]));
+      setTimeout(() => this._busy.update(s => { const n = new Set(s); n.delete(act); return n; }), ms);
+    }
+    this.action.emit(act);
+  }
 
   isLive(phase: string): boolean {
     return LIVE_PHASES.includes(phase);

@@ -1125,7 +1125,35 @@ select.wf-input { cursor: pointer; }
   font-weight: 500;
 }
 .wf-d-tag-dot { width: 6px; height: 6px; border-radius: 50%; }
-.wf-d-actions { display: flex; gap: 2px; }
+.wf-d-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* Labeled action button — replaces icon-only ibtn */
+.wf-d-abtn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--wf-rad-sm);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--wf-text-mute);
+  border: 1px solid var(--wf-border);
+  transition: background .12s, color .12s, border-color .12s;
+  white-space: nowrap;
+}
+.wf-d-abtn:hover:not(:disabled) {
+  background: var(--wf-bg-hover);
+  color: var(--wf-text);
+  border-color: var(--wf-border-strong);
+}
+.wf-d-abtn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/* Keep ibtn for any remaining icon-only usage */
 .wf-d-ibtn {
   all: unset; cursor: pointer;
   width: 28px; height: 28px; border-radius: var(--wf-rad-sm);
