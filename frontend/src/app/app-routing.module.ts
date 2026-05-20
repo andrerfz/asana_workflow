@@ -18,6 +18,10 @@ const routes: Routes = [
     path: 'history',
     loadChildren: () => import('./pages/history/history.module').then(m => m.HistoryModule),
   },
+  {
+    path: 'wf',
+    loadComponent: () => import('./pages/wf-dashboard/wf-dashboard.page').then(m => m.WfDashboardPage),
+  },
   { path: '**', redirectTo: '', pathMatch: 'full' },
 ];
 
