@@ -5,6 +5,22 @@
    Accent: --wf-accent overridden inline
 */
 
+/* ── Break out of Ionic's ion-page wrapper so the grid fills the viewport ── */
+app-wf-dashboard,
+app-wf-dashboard ion-page {
+  display: contents;
+}
+
+ion-router-outlet:has(app-wf-dashboard) {
+  contain: none;
+}
+
+.wf-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
 .wf-root {
   /* deep — based on the user's current screenshot */
   --wf-bg:        #0f1216;
