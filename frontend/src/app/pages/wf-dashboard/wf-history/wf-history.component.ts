@@ -2,7 +2,7 @@ import {
   Component, ChangeDetectionStrategy, ViewEncapsulation,
   signal, inject, OnInit, computed,
 } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { firstValueFrom } from 'rxjs';
 
@@ -41,7 +41,7 @@ interface DayBucket {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
-  imports: [DatePipe],
+  imports: [DatePipe, DecimalPipe],
   template: `
 <div class="wf-hist">
 
@@ -85,26 +85,58 @@ interface DayBucket {
         <div class="wf-hist-chart-legend">
           <span><span class="wf-legend-dot" style="background:var(--wf-green)"></span>Success</span>
           <span><span class="wf-legend-dot" style="background:var(--wf-red)"></span>Failed</span>
-          <span><span class="wf-legend-dot" style="background:var(--wf-amber);opacity:.5"></span>Cost</span>
+          <span><span class="wf-legend-dot" style="background:var(--wf-amber);opacity:.6"></span>Cost / day</span>
         </div>
       </div>
-      <div class="wf-barchart">
-        @for (d of chartData(); track d.day) {
-          <div class="wf-bar-col">
-            <div class="wf-bar-wrap">
-              <div class="wf-bar-stack">
-                @if (d.failed > 0) {
-                  <div [style.height.%]="barPct(d.failed, maxRuns())" style="background:var(--wf-red)"></div>
-                }
-                @if (d.success > 0) {
-                  <div [style.height.%]="barPct(d.success, maxRuns())" style="background:var(--wf-green)"></div>
-                }
+
+      <div class="wf-chart-wrap">
+        <!-- Y-axis labels (run count) -->
+        <div class="wf-chart-yaxis">
+          <span>{{ maxRuns() }}</span>
+          <span>{{ (maxRuns() / 2) | number:'1.0-0' }}</span>
+          <span>0</span>
+        </div>
+
+        <div class="wf-barchart">
+          @for (d of chartData(); track d.day) {
+            <div class="wf-bar-col"
+              (mouseenter)="hoveredBar.set(d)"
+              (mouseleave)="hoveredBar.set(null)">
+
+              <!-- Tooltip -->
+              @if (hoveredBar() === d) {
+                <div class="wf-bar-tip">
+                  <div class="wf-bar-tip-day">{{ d.day }}</div>
+                  <div class="wf-bar-tip-row">
+                    <span style="color:var(--wf-green)">✓ {{ d.success }}</span>
+                    <span style="color:var(--wf-red)">✗ {{ d.failed }}</span>
+                  </div>
+                  <div class="wf-bar-tip-cost">{{ fmtCost(d.cost) }}</div>
+                </div>
+              }
+
+              <div class="wf-bar-wrap">
+                <div class="wf-bar-stack">
+                  @if (d.failed > 0) {
+                    <div [style.height.%]="barPct(d.failed, maxRuns())" style="background:var(--wf-red)"></div>
+                  }
+                  @if (d.success > 0) {
+                    <div [style.height.%]="barPct(d.success, maxRuns())" style="background:var(--wf-green)"></div>
+                  }
+                </div>
+                <div class="wf-bar-cost" [style.height.%]="barPct(d.cost, maxCost())"></div>
               </div>
-              <div class="wf-bar-cost" [style.height.%]="barPct(d.cost, maxCost())"></div>
+              <div class="wf-bar-lbl">{{ d.day }}</div>
             </div>
-            <div class="wf-bar-lbl">{{ d.day }}</div>
-          </div>
-        }
+          }
+        </div>
+
+        <!-- Cost axis (right) -->
+        <div class="wf-chart-yaxis wf-chart-yaxis-r" style="color:var(--wf-amber)">
+          <span>{{ fmtCost(maxCost()) }}</span>
+          <span>{{ fmtCost(maxCost() / 2) }}</span>
+          <span>{{ fmtCost(0) }}</span>
+        </div>
       </div>
     </div>
   }
@@ -178,6 +210,7 @@ export class WfHistoryComponent implements OnInit {
   loading = signal(true);
   runs = signal<HistoryRun[]>([]);
   stats = signal<HistoryStats | null>(null);
+  hoveredBar = signal<DayBucket | null>(null);
 
   readonly chartData = computed<DayBucket[]>(() => {
     const buckets = new Map<string, DayBucket>();
@@ -223,6 +256,10 @@ export class WfHistoryComponent implements OnInit {
 
   barPct(value: number, max: number): number {
     return max > 0 ? Math.round((value / max) * 100) : 0;
+  }
+
+  fmtCost(value: number): string {
+    return '$' + value.toFixed(2);
   }
 
   fmtDate(iso: string): string {

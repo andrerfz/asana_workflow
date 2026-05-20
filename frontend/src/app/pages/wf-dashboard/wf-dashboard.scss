@@ -599,6 +599,70 @@ ion-router-outlet:has(app-wf-dashboard) {
   gap: 10px;
 }
 
+/* Chart layout with y-axes */
+.wf-chart-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.wf-chart-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--wf-text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  padding-bottom: 20px; /* align with bar labels */
+  min-width: 28px;
+  text-align: right;
+}
+
+.wf-chart-yaxis-r {
+  text-align: left;
+}
+
+/* Tooltip on hover */
+.wf-bar-col {
+  position: relative;
+  cursor: default;
+}
+
+.wf-bar-tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--wf-bg-sel);
+  border: 1px solid var(--wf-border-strong);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+
+.wf-bar-tip-day {
+  font-weight: 600;
+  color: var(--wf-text);
+  margin-bottom: 3px;
+}
+
+.wf-bar-tip-row {
+  display: flex;
+  gap: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.wf-bar-tip-cost {
+  color: var(--wf-amber);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 3px;
+  font-size: 11px;
+}
+
 .wf-hist-trend {
   font-size: 10.5px;
   color: var(--wf-text-mute);
