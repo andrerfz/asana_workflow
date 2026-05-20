@@ -1167,6 +1167,7 @@ select.wf-input { cursor: pointer; }
 }
 
 .wf-branch-panel {
+  box-sizing: border-box;
   width: 100%;
   max-width: 520px;
   background: var(--wf-bg-card);
@@ -1207,11 +1208,13 @@ select.wf-input { cursor: pointer; }
 
 .wf-branch-slug-btn {
   all: unset;
+  box-sizing: border-box;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   padding: 10px 12px;
   border-radius: var(--wf-rad);
   border: 1px solid var(--wf-border);
@@ -1225,9 +1228,11 @@ select.wf-input { cursor: pointer; }
     font-size: 12px;
     color: var(--wf-accent);
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: block;
   }
 
   &:hover {
