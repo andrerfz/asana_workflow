@@ -222,9 +222,9 @@ const BUSY_ACTIONS: Record<string, number> = {
 
                         @if (ph.id === 'queued') {
                           <div class="wf-d-card" style="margin-top:14px">
-                            <div class="wf-d-card-h">Queued</div>
+                            <div class="wf-d-card-h">{{ task()!.phase === 'cancelled' ? 'Cancelled' : task()!.phase === 'error' ? 'Failed' : 'Queued' }}</div>
                             <div class="wf-d-acts">
-                              <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? "Starting…" : "Start now" }}</button>
+                              <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? 'Starting…' : task()!.phase === 'queued' ? 'Start now' : 'Re-run' }}</button>
                             </div>
                           </div>
                         }
@@ -248,11 +248,11 @@ const BUSY_ACTIONS: Record<string, number> = {
             </div>
           }
 
-          @if (task()!.phase === 'queued') {
+          @if (task()!.phase === 'queued' || task()!.phase === 'cancelled' || task()!.phase === 'error') {
             <div class="wf-d-card" style="margin-top:14px">
-              <div class="wf-d-card-h">Queued</div>
+              <div class="wf-d-card-h">{{ task()!.phase === 'cancelled' ? 'Cancelled' : task()!.phase === 'error' ? 'Failed' : 'Queued' }}</div>
               <div class="wf-d-acts">
-                <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? "Starting…" : "Start now" }}</button>
+                <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? 'Starting…' : task()!.phase === 'queued' ? 'Start now' : 'Re-run' }}</button>
               </div>
             </div>
           }
