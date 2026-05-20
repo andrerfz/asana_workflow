@@ -1109,6 +1109,7 @@ select.wf-input { cursor: pointer; }
    DRAWER
    ────────────────────────────────────────────────────────── */
 .wf-drawer {
+  position: relative;
   border-left: 1px solid var(--wf-border);
   background: var(--wf-bg-sub);
   display: flex; flex-direction: column;
