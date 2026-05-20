@@ -21,6 +21,65 @@ ion-router-outlet:has(app-wf-dashboard) {
   z-index: 100;
 }
 
+/*
+ * ── Grid placement for Angular host elements ──────────────────────────────
+ * The CSS grid is on .wf-root. Its DIRECT children are the Angular host
+ * elements (app-wf-header, app-wf-sidebar, app-wf-drawer, main.wf-main).
+ * The .wf-header / .wf-side / .wf-drawer classes are one level INSIDE those
+ * hosts, so we must tell the grid where each host lives.
+ */
+/* Host elements are the actual CSS grid children — give them placement */
+.wf-root > app-wf-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+/* Inner header fills the host */
+.wf-root > app-wf-header > .wf-header {
+  flex: 1;
+  width: 100%;
+}
+
+.wf-root > app-wf-sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+/* Inner aside fills the host */
+.wf-root > app-wf-sidebar > .wf-side {
+  width: 100%;
+  height: 100%;
+}
+
+/* main.wf-main is a direct grid child — CSS already has its grid-column/row
+   but they're on .wf-header and .wf-side; main needs explicit placement too */
+.wf-root > main.wf-main {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.wf-root > app-wf-drawer {
+  grid-column: 3;
+  grid-row: 2;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Inner aside fills the host */
+.wf-root > app-wf-drawer > .wf-drawer {
+  width: 100%;
+  height: 100%;
+}
+
+/* Components inside .wf-main: make them block so they stack naturally */
+.wf-root app-wf-stats-bar { display: block; }
+.wf-root app-wf-toolbar    { display: block; }
+.wf-root app-wf-list       { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.wf-root app-wf-cards      { display: block; overflow-y: auto; flex: 1; }
+
 .wf-root {
   /* deep — based on the user's current screenshot */
   --wf-bg:        #0f1216;
@@ -142,8 +201,6 @@ ion-router-outlet:has(app-wf-dashboard) {
    HEADER
    ────────────────────────────────────────────────────────── */
 .wf-header {
-  grid-column: 1 / -1;
-  grid-row: 1;
   display: flex; align-items: center; gap: 16px;
   padding: 0 18px;
   height: 56px;
