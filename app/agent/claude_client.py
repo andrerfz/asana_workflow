@@ -145,6 +145,11 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
 
     cli_env = {k: v for k, v in os.environ.items() if k in _ALLOWED_ENV_KEYS}
 
+    log.info("[claude] Subprocess starting — task=%s model=%s max_turns=%d prompt_len=%d",
+             task_gid or "?", model or "default", max_turns, len(prompt))
+    if task_gid:
+        add_log(task_gid, f"[claude] Subprocess starting (model={model or 'default'}, max_turns={max_turns})", "debug")
+
     process = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=cwd,
@@ -240,7 +245,11 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
             if tgid:
                 add_log(tgid, "[claude] Rate limit hit — pausing until quota resets", "warning")
 
-    # Heartbeat: log "still working..." every 30s if no events received
+    # Heartbeat: log "still working..." every 30s + kill if rate-limited too long
+    # Max time to wait on a rate limit before giving up (avoids all-night hangs)
+    MAX_RATE_LIMIT_WAIT = 20 * 60  # 20 minutes
+    rate_limit_seconds: list[int] = [0]  # mutable for closure
+
     async def _heartbeat():
         last_count = 0
         silent_seconds = 0
@@ -254,7 +263,21 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                     add_log(task_gid, f"[claude] Still working... ({silent_seconds}s silent) — last: {last_action[0]}", "debug")
             else:
                 last_count = len(stdout_lines)
-                silent_seconds = 0  # reset after activity
+                silent_seconds = 0  # reset after non-rate-limit activity
+
+            # Track consecutive rate-limit-only time
+            if "rate limit" in last_action[0].lower():
+                rate_limit_seconds[0] += 30
+                if rate_limit_seconds[0] >= MAX_RATE_LIMIT_WAIT:
+                    if task_gid:
+                        add_log(task_gid,
+                            f"[claude] Rate limit persisted {rate_limit_seconds[0]//60}min — killing subprocess to avoid all-night hang",
+                            "warning")
+                    log.warning("Rate limit kill after %ds for task %s", rate_limit_seconds[0], task_gid)
+                    process.kill()
+                    break
+            else:
+                rate_limit_seconds[0] = 0  # reset when non-rate-limit activity happens
 
     heartbeat_task = asyncio.create_task(_heartbeat())
     timed_out = False
