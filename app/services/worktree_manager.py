@@ -39,6 +39,36 @@ def get_worktree_path(task_gid: str, repo_id: str) -> Path:
     return wt_path
 
 
+def _copy_local_config_files(repo_root: Path, wt_path: Path) -> None:
+    """Copy .env and *.local files from repo root to the worktree.
+
+    These files are git-ignored so they don't exist in a fresh worktree.
+    Without them the agent can't run tests or CLI commands that depend on
+    environment variables or local overrides.
+    """
+    candidates: list[Path] = []
+
+    # .env (and .env.* variants like .env.testing, .env.local)
+    for p in repo_root.glob(".env*"):
+        if p.is_file():
+            candidates.append(p)
+
+    # Any *.local file in the root (e.g. phpunit.xml.local, Makefile.local)
+    for p in repo_root.glob("*.local"):
+        if p.is_file():
+            candidates.append(p)
+
+    for src in candidates:
+        dest = wt_path / src.name
+        if dest.exists():
+            continue  # already there (worktree resumed from existing branch)
+        try:
+            shutil.copy2(src, dest)
+            log.info("Copied %s → worktree", src.name)
+        except OSError as e:
+            log.warning("Could not copy %s to worktree: %s", src.name, e)
+
+
 def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
                     base_branch: str = None) -> dict:
     """
@@ -120,6 +150,11 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
     # Unset upstream so `git push` doesn't target master.
     # The branch was created from origin/master and inherits its tracking.
     _run_git(["branch", "--unset-upstream", branch_name], cwd=str(wt_path))
+
+    # Copy untracked config files from repo root into the worktree.
+    # These are intentionally git-ignored (secrets, local overrides) so they
+    # won't exist in a fresh worktree — the agent needs them to run tests/commands.
+    _copy_local_config_files(Path(repo_path), wt_path)
 
     log.info("Created worktree: %s (branch: %s)", wt_path, branch_name)
     return {
