@@ -14,6 +14,10 @@ export interface Task {
   tipo: string | null;
   canal: string | null;
   notes?: string;
+  notes_preview?: string;
+  ai_summary?: string | null;
+  ai_reasoning?: string | null;
+  classification_source?: string | null;
   priority: number;
   area: string | null;
   projects?: string[];

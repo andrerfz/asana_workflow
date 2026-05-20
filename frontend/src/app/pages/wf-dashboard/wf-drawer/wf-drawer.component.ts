@@ -16,6 +16,7 @@ const BUSY_ACTIONS: Record<string, number> = {
   encapsulation: ViewEncapsulation.None,
   template: `
     <aside class="wf-drawer">
+      <div class="wf-drawer-resize" (mousedown)="onResizeStart($event)"></div>
       @if (!task()) {
         <div class="wf-d-head">
           <div class="wf-d-tag-row">
@@ -88,6 +89,12 @@ const BUSY_ACTIONS: Record<string, number> = {
                 <span class="wf-classif-badge is-missing">not classified</span>
               }
             </div>
+            @if (task()!.ai_summary) {
+              <p class="wf-classif-summary">{{ task()!.ai_summary }}</p>
+            }
+            @if (task()!.ai_reasoning) {
+              <p class="wf-classif-reasoning">{{ task()!.ai_reasoning }}</p>
+            }
             <div class="wf-classif-grid">
               <div class="wf-kv-row">
                 <div class="wf-kv-k">Cluster</div>
@@ -274,6 +281,27 @@ export class WfDrawerComponent {
   action = output<string>();
 
   phases = WF_PHASES;
+
+  onResizeStart(e: MouseEvent): void {
+    e.preventDefault();
+    const startX = e.clientX;
+    const root = document.querySelector('.wf-root') as HTMLElement;
+    const startW = parseInt(getComputedStyle(root).getPropertyValue('--wf-drawer') || '380', 10);
+    const maxW = Math.round(window.innerWidth * 0.30);
+    const minW = 280;
+
+    const onMove = (mv: MouseEvent) => {
+      const delta = startX - mv.clientX; // drag left = wider
+      const newW = Math.min(maxW, Math.max(minW, startW + delta));
+      root.style.setProperty('--wf-drawer', `${newW}px`);
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
 
   readonly isClassified = computed(() => {
     const t = this.task();

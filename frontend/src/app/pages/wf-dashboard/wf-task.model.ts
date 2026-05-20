@@ -24,6 +24,8 @@ export interface WfTask {
   tipo: string | null;
   canal: string | null;
   area: string | null;
+  ai_summary: string | null;
+  ai_reasoning: string | null;
   scope: number;
   priority: number;
   notes: string;
@@ -50,6 +52,8 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     tipo: task.tipo,
     canal: task.canal ?? null,
     area: task.area ?? null,
+    ai_summary: task.ai_summary ?? null,
+    ai_reasoning: task.ai_reasoning ?? null,
     scope: task.scope_score,
     priority: task.priority,
     notes: task.notes ?? '',
