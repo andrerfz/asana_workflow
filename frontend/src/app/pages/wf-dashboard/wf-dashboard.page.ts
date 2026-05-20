@@ -23,8 +23,6 @@ import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
 import { firstValueFrom } from 'rxjs';
 import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.component';
-import { BranchModalComponent, BranchModalResult } from '../../shared/components/branch-modal/branch-modal.component';
-import { ModalController } from '@ionic/angular';
 import { WfHistoryComponent } from './wf-history/wf-history.component';
 
 @Component({
@@ -129,6 +127,54 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         </main>
       }
 
+      <!-- ── BRANCH SELECTION OVERLAY ── -->
+      @if (branchModal()) {
+        <div class="wf-branch-overlay" (click)="branchCancel()">
+          <div class="wf-branch-panel" (click)="$event.stopPropagation()">
+            <div class="wf-branch-head">
+              <span>Start Agent</span>
+              <button class="wf-btn wf-btn-icon" (click)="branchCancel()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            @if (branchModal()!.slug) {
+              <div class="wf-branch-section">
+                <div class="wf-branch-section-lbl">Suggested branch</div>
+                <button class="wf-branch-slug-btn" (click)="branchPickFresh()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M6 18a9 9 0 0 0 9-9v3"/></svg>
+                  <code>{{ branchModal()!.slug }}</code>
+                  <span class="wf-branch-slug-hint">click to use</span>
+                </button>
+              </div>
+            }
+
+            @if (branchModal()!.suggestions.length > 0) {
+              <div class="wf-branch-section">
+                <div class="wf-branch-section-lbl">Continue on existing branch</div>
+                @for (s of branchModal()!.suggestions; track s.branch) {
+                  <button class="wf-branch-item" (click)="branchPickExisting(s.branch)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M6 18a9 9 0 0 0 9-9v3"/></svg>
+                    <div>
+                      <div class="wf-mono" style="font-size:12px">{{ s.branch.replace('feature/' + branchModal()!.gid + '/', '…/') }}</div>
+                      <div style="font-size:11px;color:var(--wf-text-mute)">{{ s.author }}</div>
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:auto;flex-shrink:0"><path d="m9 18 6-6-6-6"/></svg>
+                  </button>
+                }
+              </div>
+            }
+
+            <div class="wf-branch-section">
+              <button class="wf-btn" style="width:100%" (click)="branchPickFresh()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                Fresh branch
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- ── TOAST ── -->
       @if (toast()) {
         <div class="wf-toast">
@@ -144,7 +190,6 @@ export class WfDashboardPage implements OnInit {
   protected stateService = inject(AgentStateService);
   private api = inject(ApiService);
   private router = inject(Router);
-  private modalCtrl = inject(ModalController);
 
   // UI state signals
   mode = signal<string>('tasks');
@@ -168,6 +213,10 @@ export class WfDashboardPage implements OnInit {
 
   // Per-task start loading state
   startingGids = signal<Set<string>>(new Set());
+
+  // Inline branch selection overlay
+  branchModal = signal<{ gid: string; slug: string; suggestions: { branch: string; author: string }[] } | null>(null);
+  private _branchResolve: ((base: string | null | 'cancel') => void) | null = null;
 
 
   // All tasks merged with run data
@@ -265,6 +314,31 @@ export class WfDashboardPage implements OnInit {
     return WF_PHASE_BY_ID[phase as string]?.label ?? String(phase ?? '—');
   }
 
+  private _showBranchModal(gid: string, slug: string, suggestions: { branch: string; author: string }[]): Promise<string | null | 'cancel'> {
+    return new Promise(resolve => {
+      this._branchResolve = resolve;
+      this.branchModal.set({ gid, slug, suggestions });
+    });
+  }
+
+  branchPickFresh(): void {
+    this._branchResolve?.(null);
+    this._branchResolve = null;
+    this.branchModal.set(null);
+  }
+
+  branchPickExisting(branch: string): void {
+    this._branchResolve?.(branch);
+    this._branchResolve = null;
+    this.branchModal.set(null);
+  }
+
+  branchCancel(): void {
+    this._branchResolve?.('cancel');
+    this._branchResolve = null;
+    this.branchModal.set(null);
+  }
+
   onModeChange(mode: string): void {
     this.mode.set(mode);
   }
@@ -355,18 +429,9 @@ export class WfDashboardPage implements OnInit {
       const { slug, suggestions } = await this.stateService.startAgentWithBranch(gid);
 
       if (suggestions.length > 0 || slug) {
-        const isDark = this.darkMode();
-        const modal = await this.modalCtrl.create({
-          component: BranchModalComponent,
-          componentProps: { taskGid: gid, branchSlug: slug, suggestions },
-          breakpoints: [0, 0.75, 1],
-          initialBreakpoint: 0.75,
-          cssClass: isDark ? 'ion-palette-dark' : '',
-        });
-        await modal.present();
-        const { data } = await modal.onWillDismiss<BranchModalResult | null>();
-        if (!data) return; // cancelled
-        await this.stateService.confirmStart(gid, slug, data.baseBranch);
+        const baseBranch = await this._showBranchModal(gid, slug, suggestions);
+        if (baseBranch === 'cancel') return;
+        await this.stateService.confirmStart(gid, slug, baseBranch);
       } else {
         // No slug and no suggestions — start with gid suffix as fallback slug
         await this.stateService.confirmStart(gid, gid.slice(-8), null);
