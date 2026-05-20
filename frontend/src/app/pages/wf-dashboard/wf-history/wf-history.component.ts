@@ -213,17 +213,24 @@ export class WfHistoryComponent implements OnInit {
   hoveredBar = signal<DayBucket | null>(null);
 
   readonly chartData = computed<DayBucket[]>(() => {
-    const buckets = new Map<string, DayBucket>();
+    // Use ISO date as key so we can sort correctly, display label separately
+    const buckets = new Map<string, DayBucket & { _ts: number }>();
     for (const r of this.runs()) {
       if (!r.created_at) continue;
       const d = new Date(r.created_at);
-      const key = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-      if (!buckets.has(key)) buckets.set(key, { day: key, success: 0, failed: 0, cost: 0 });
-      const b = buckets.get(key)!;
+      const isoKey = d.toISOString().slice(0, 10); // YYYY-MM-DD — sortable
+      const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      if (!buckets.has(isoKey)) {
+        buckets.set(isoKey, { day: label, success: 0, failed: 0, cost: 0, _ts: d.getTime() });
+      }
+      const b = buckets.get(isoKey)!;
       if (r.phase === 'done') b.success++; else b.failed++;
       b.cost += r.cost_usd ?? 0;
     }
-    return Array.from(buckets.values()).slice(-14).reverse();
+    // Sort ascending by date, take the 14 most recent days
+    return Array.from(buckets.values())
+      .sort((a, b) => a._ts - b._ts)
+      .slice(-14);
   });
 
   readonly maxRuns = computed(() => Math.max(...this.chartData().map(d => d.success + d.failed), 1));
