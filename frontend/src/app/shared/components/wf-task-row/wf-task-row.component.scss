@@ -1,0 +1,125 @@
+// ── Host element ─────────────────────────────────────────────────────────────
+:host {
+  display: block;
+}
+
+// ── Row states ────────────────────────────────────────────────────────────────
+.task-row {
+  --padding-start: 0;          // accent bar handles left spacing
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &.needs-approval { --background: color-mix(in srgb, var(--ion-color-warning) 6%, transparent); }
+  &.is-active      { --background: color-mix(in srgb, var(--ion-color-primary) 4%, transparent); }
+}
+
+// ── Accent bar ────────────────────────────────────────────────────────────────
+.accent-bar {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 0;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+// ── Task name ────────────────────────────────────────────────────────────────
+.row-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+// ── Meta row ─────────────────────────────────────────────────────────────────
+.row-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin: 0 0 4px;
+}
+
+.chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.cluster-chip {
+  // color set inline from cluster.color; background is a tint
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.section-chip {
+  color: var(--ion-color-medium);
+  background: var(--ion-color-light);
+}
+
+.scope-chip {
+  background: var(--ion-color-primary);
+  color: #fff;
+}
+
+.tipo-chip {
+  color: var(--ion-color-medium);
+  font-style: italic;
+  background: transparent;
+  padding: 0;
+}
+
+// ── Phase row ────────────────────────────────────────────────────────────────
+.row-phase {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.phase-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pulse-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  animation: pulse-ring 1.4s ease-out infinite;
+  opacity: 0;
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.phase-label {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.last-log {
+  color: var(--ion-color-medium);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}

@@ -1,0 +1,75 @@
+<ion-item
+  class="task-row"
+  [class.needs-approval]="needsApproval()"
+  [class.is-active]="isActive()"
+  detail="false"
+  (click)="onOpen()">
+
+  <!-- Left accent bar colour = cluster colour -->
+  <div class="accent-bar" [style.background]="clusterColor()" slot="start"></div>
+
+  <ion-label>
+    <!-- Row 1: name -->
+    <h3 class="row-name">{{ task().name }}</h3>
+
+    <!-- Row 2: meta chips -->
+    <p class="row-meta">
+      @if (clusterName()) {
+        <span class="chip cluster-chip" [style.color]="clusterColor()">
+          {{ clusterName() }}
+        </span>
+      }
+      @if (task().section_name) {
+        <span class="chip section-chip">{{ task().section_name }}</span>
+      }
+      @if (scopeLabel()) {
+        <span class="chip scope-chip">⬡ {{ scopeLabel() }}</span>
+      }
+      @if (task().tipo) {
+        <span class="chip tipo-chip">{{ task().tipo }}</span>
+      }
+    </p>
+
+    <!-- Row 3: phase + last log (only when agent is running) -->
+    @if (phase()) {
+      <p class="row-phase">
+        <span class="phase-dot" [style.background]="phaseColor()">
+          @if (isPulsing()) { <span class="pulse-ring" [style.border-color]="phaseColor()"></span> }
+        </span>
+        <span class="phase-label" [style.color]="phaseColor()">{{ phaseLabel() }}</span>
+        @if (isActive() && lastLog()) {
+          <span class="last-log">— {{ lastLog() | slice:0:60 }}</span>
+        }
+      </p>
+    }
+  </ion-label>
+
+  <!-- Right slot: conditional actions -->
+  <div slot="end" class="row-actions" (click)="$event.stopPropagation()">
+
+    @if (needsApproval()) {
+      <ion-button fill="clear" size="small" color="success" (click)="onApprove($event)">
+        <ion-icon slot="icon-only" name="checkmark-circle-outline"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" size="small" color="danger" (click)="onReject($event)">
+        <ion-icon slot="icon-only" name="close-circle-outline"></ion-icon>
+      </ion-button>
+    }
+
+    @if (isActive()) {
+      <ion-button fill="clear" size="small" color="danger" (click)="onStop($event)">
+        <ion-icon slot="icon-only" name="stop-circle-outline"></ion-icon>
+      </ion-button>
+    } @else {
+      <ion-button fill="clear" size="small" color="primary" (click)="onRun($event)">
+        <ion-icon slot="icon-only" name="play-circle-outline"></ion-icon>
+      </ion-button>
+    }
+
+    <ion-button fill="clear" size="small" color="medium" (click)="onOpen()">
+      <ion-icon slot="icon-only" name="chevron-forward-outline"></ion-icon>
+    </ion-button>
+
+  </div>
+
+</ion-item>
