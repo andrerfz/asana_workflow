@@ -22,7 +22,7 @@ import { WfCardsComponent } from './wf-cards/wf-cards.component';
 import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
 import { firstValueFrom } from 'rxjs';
-import { WfSettingsComponent } from './wf-settings/wf-settings.component';
+import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.component';
 
 @Component({
   selector: 'app-wf-dashboard',
@@ -359,8 +359,11 @@ export class WfDashboardPage implements OnInit {
         const run = this.stateService.getRunForTask(gid);
         const path = run?.repos?.[0]?.worktree_path;
         if (path) {
-          this.api.openInIde(path, { cli: 'code', cliArgs: ['-r'] }).subscribe();
-          this.flash('Opening in VS Code…');
+          const ideId = localStorage.getItem('wf-ide') ?? 'vscode';
+          const idePath = localStorage.getItem('wf-ide-path') ?? '';
+          const ideConfig = getIdeConfig(ideId, idePath);
+          this.api.openInIde(path, ideConfig).subscribe();
+          this.flash(`Opening in ${ideId}…`);
         }
         break;
       }

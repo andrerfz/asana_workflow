@@ -8,14 +8,30 @@ import { WF_PHASES } from '../wf-task.model';
 
 type SettingsTab = 'repos' | 'ide' | 'agent' | 'guides' | 'workflow' | 'mapping';
 
-const IDE_OPTIONS = [
-  { id: 'phpstorm', label: 'PhpStorm',  proto: 'phpstorm://open?file=' },
-  { id: 'vscode',   label: 'VS Code',   proto: 'vscode://file/' },
-  { id: 'cursor',   label: 'Cursor',    proto: 'cursor://file/' },
-  { id: 'webstorm', label: 'WebStorm',  proto: 'webstorm://open?file=' },
-  { id: 'idea',     label: 'IntelliJ',  proto: 'idea://open?file=' },
-  { id: 'subl',     label: 'Sublime',   proto: 'subl://open?url=file://' },
+export interface IdeOption {
+  id: string;
+  label: string;
+  sub: string;          // shown in settings radio
+  cli?: string;         // binary for /api/ide/open
+  cliArgs?: string[];
+  app?: string;         // macOS app name for `open -a`
+}
+
+export const IDE_OPTIONS: IdeOption[] = [
+  { id: 'phpstorm', label: 'PhpStorm', sub: 'JetBrains',  app: 'PhpStorm' },
+  { id: 'vscode',   label: 'VS Code',  sub: 'cli: code',  cli: 'code',   cliArgs: ['-r'] },
+  { id: 'cursor',   label: 'Cursor',   sub: 'cli: cursor', cli: 'cursor', cliArgs: ['-r'] },
+  { id: 'webstorm', label: 'WebStorm', sub: 'JetBrains',  app: 'WebStorm' },
+  { id: 'idea',     label: 'IntelliJ', sub: 'JetBrains',  app: 'IntelliJ IDEA' },
+  { id: 'custom',   label: 'Custom',   sub: 'set CLI path below' },
 ];
+
+export function getIdeConfig(id: string, customPath: string): { cli?: string; cliArgs?: string[]; app?: string } {
+  if (id === 'custom') return { cli: customPath };
+  const opt = IDE_OPTIONS.find(o => o.id === id);
+  if (!opt) return { cli: 'code', cliArgs: ['-r'] };
+  return { cli: opt.cli, cliArgs: opt.cliArgs, app: opt.app };
+}
 
 @Component({
   selector: 'app-wf-settings',
@@ -152,7 +168,7 @@ const IDE_OPTIONS = [
                 <button class="wf-radio" [class.is-on]="selectedIde() === i.id" (click)="selectIde(i.id)">
                   <span class="wf-radio-dot"></span>
                   <span style="flex:1">{{ i.label }}</span>
-                  <span class="wf-mono" style="font-size:10px;color:var(--wf-text-mute)">{{ i.proto }}</span>
+                  <span class="wf-mono" style="font-size:10px;color:var(--wf-text-mute)">{{ i.sub }}</span>
                 </button>
               }
             </div>
