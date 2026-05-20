@@ -74,6 +74,15 @@ ion-router-outlet:has(app-wf-dashboard) {
   height: 100%;
 }
 
+/* History / Settings modes span all 3 columns */
+.wf-root > main.wf-full-col {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 /* Components inside .wf-main: make them block so they stack naturally */
 .wf-root app-wf-stats-bar { display: block; }
 .wf-root app-wf-toolbar    { display: block; }

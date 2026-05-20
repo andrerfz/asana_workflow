@@ -6,10 +6,13 @@ import {
   computed,
   inject,
   HostListener,
+  OnInit,
 } from '@angular/core';
+import { Router } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { AgentStateService } from '../../core/services/agent-state.service';
 import { ApiService } from '../../core/services/api.service';
-import { toWfTask, WfTask, LIVE_PHASES } from './wf-task.model';
+import { toWfTask, WfTask, LIVE_PHASES, WF_PHASE_BY_ID } from './wf-task.model';
 import { WfStats, WfHeaderComponent } from './wf-header/wf-header.component';
 import { WfSidebarComponent } from './wf-sidebar/wf-sidebar.component';
 import { WfStatsBarComponent } from './wf-stats-bar/wf-stats-bar.component';
@@ -18,6 +21,7 @@ import { WfListComponent } from './wf-list/wf-list.component';
 import { WfCardsComponent } from './wf-cards/wf-cards.component';
 import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-wf-dashboard',
@@ -32,9 +36,11 @@ import { WfAction } from './wf-list/wf-list.component';
     WfListComponent,
     WfCardsComponent,
     WfDrawerComponent,
+    DatePipe,
   ],
   template: `
     <div class="wf-root" [class.wf-theme-light]="darkMode()">
+
       <app-wf-header
         [stats]="stats()"
         [search]="search()"
@@ -42,12 +48,13 @@ import { WfAction } from './wf-list/wf-list.component';
         [connected]="stateService.connected()"
         [darkMode]="darkMode()"
         (searchChange)="search.set($event)"
-        (modeChange)="mode.set($event)"
+        (modeChange)="onModeChange($event)"
         (darkModeToggle)="toggleDarkMode()"
         (classify)="onClassify()"
         (sync)="onSync()"
       />
 
+      <!-- ── TASKS ── -->
       @if (mode() === 'tasks') {
         <app-wf-sidebar
           [tasks]="allWfTasks()"
@@ -59,7 +66,6 @@ import { WfAction } from './wf-list/wf-list.component';
           (sectionChange)="section.set($event)"
           (selectedChange)="selected.set($event)"
         />
-
         <main class="wf-main">
           <app-wf-stats-bar
             [stats]="stats()"
@@ -78,7 +84,6 @@ import { WfAction } from './wf-list/wf-list.component';
             (clusterChange)="cluster.set($event)"
             (resetFilters)="resetFilters()"
           />
-
           @if (view() === 'list') {
             <app-wf-list
               [tasks]="filteredTasks()"
@@ -95,30 +100,73 @@ import { WfAction } from './wf-list/wf-list.component';
             />
           }
         </main>
-
         <app-wf-drawer
           [task]="selectedTask()"
           (action)="onDrawerAction($event)"
         />
       }
 
+      <!-- ── HISTORY ── -->
       @if (mode() === 'history') {
-        <main class="wf-main" style="grid-column:1 / -1; display:flex; flex-direction:column; min-height:0">
-          <div style="padding:24px; color:var(--wf-text-mute)">History view coming soon…</div>
+        <main class="wf-main wf-full-col">
+          @if (historyLoading()) {
+            <div class="wf-empty" style="padding:40px">Loading history…</div>
+          } @else {
+            <div class="wf-cols-h">
+              <div>Task</div><div>Phase</div><div>Cost</div><div>Started</div><div>Duration</div>
+            </div>
+            <div class="wf-list">
+              @if (historyItems().length === 0) {
+                <div class="wf-empty">No completed runs yet</div>
+              }
+              @for (run of historyItems(); track run['task_gid']) {
+                <div class="wf-row" (click)="selected.set($any(run['task_gid'])); mode.set('tasks')">
+                  <div class="wf-row-task">
+                    <span class="wf-row-cdot" style="background:var(--wf-accent)"></span>
+                    <div class="wf-row-task-main">
+                      <div class="wf-row-title">{{ run['task_name'] || run['task_gid'] }}</div>
+                    </div>
+                  </div>
+                  <div class="wf-row-phase">
+                    <span class="wf-phase-dot" [style.background]="phaseColor(run['phase'])"></span>
+                    <span class="wf-phase-l">{{ phaseLabel(run['phase']) }}</span>
+                  </div>
+                  <div class="wf-row-cost wf-mono">{{ run['cost_usd'] ? ('$' + (+run['cost_usd']).toFixed(3)) : '—' }}</div>
+                  <div class="wf-row-repo wf-mono" style="font-size:11px">{{ run['started_at'] ? ($any(run['started_at']) | date:'short') : '—' }}</div>
+                  <div class="wf-row-repo wf-mono" style="font-size:11px">{{ run['duration_seconds'] ? (run['duration_seconds'] + 's') : '—' }}</div>
+                </div>
+              }
+            </div>
+          }
         </main>
       }
 
+      <!-- ── SETTINGS ── (navigate to dedicated settings page) -->
       @if (mode() === 'settings') {
-        <main class="wf-main" style="grid-column:1 / -1; display:flex; flex-direction:column; min-height:0">
-          <div style="padding:24px; color:var(--wf-text-mute)">Settings view coming soon…</div>
+        <main class="wf-main wf-full-col">
+          <div style="padding:40px 32px">
+            <div style="font-size:16px; font-weight:600; margin-bottom:8px">Settings</div>
+            <div style="color:var(--wf-text-mute); margin-bottom:24px">Configure repositories, IDE, area mapping, agent behaviour and guides.</div>
+            <button class="wf-btn wf-btn-go" (click)="goToSettings()">Open Settings →</button>
+          </div>
         </main>
       }
+
+      <!-- ── TOAST ── -->
+      @if (toast()) {
+        <div class="wf-toast">
+          <span class="wf-toast-dot" [style.background]="toast()!.color"></span>
+          {{ toast()!.text }}
+        </div>
+      }
+
     </div>
   `,
 })
-export class WfDashboardPage {
+export class WfDashboardPage implements OnInit {
   protected stateService = inject(AgentStateService);
   private api = inject(ApiService);
+  private router = inject(Router);
 
   // UI state signals
   mode = signal<string>('tasks');
@@ -130,7 +178,19 @@ export class WfDashboardPage {
   statFilter = signal<string | null>(null);
   view = signal<string>('list');
   search = signal('');
-  darkMode = signal(false);
+  darkMode = signal(
+    localStorage.getItem('wf-dark') !== null
+      ? localStorage.getItem('wf-dark') === 'true'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+
+  // Toast
+  toast = signal<{ text: string; color: string } | null>(null);
+  private _toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // History
+  historyItems = signal<Record<string, unknown>[]>([]);
+  historyLoading = signal(false);
 
   // All tasks merged with run data
   allWfTasks = computed<WfTask[]>(() => {
@@ -208,6 +268,41 @@ export class WfDashboardPage {
     !!this.search()
   );
 
+  ngOnInit(): void {
+    // Apply persisted dark mode to Ionic palette too
+    document.documentElement.classList.toggle('ion-palette-dark', this.darkMode());
+  }
+
+  flash(text: string, color = 'var(--wf-green)'): void {
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this.toast.set({ text, color });
+    this._toastTimer = setTimeout(() => this.toast.set(null), 2200);
+  }
+
+  phaseColor(phase: unknown): string {
+    return WF_PHASE_BY_ID[phase as string]?.color ?? '#6b7280';
+  }
+
+  phaseLabel(phase: unknown): string {
+    return WF_PHASE_BY_ID[phase as string]?.label ?? String(phase ?? '—');
+  }
+
+  async onModeChange(mode: string): Promise<void> {
+    this.mode.set(mode);
+    if (mode === 'history' && this.historyItems().length === 0) {
+      this.historyLoading.set(true);
+      try {
+        const res = await firstValueFrom(this.api.getAgentHistory());
+        this.historyItems.set((res?.runs ?? []) as Record<string, unknown>[]);
+      } catch { /* ignore */ }
+      finally { this.historyLoading.set(false); }
+    }
+  }
+
+  goToSettings(): void {
+    this.router.navigate(['/settings']);
+  }
+
   onWorkspaceChange(ws: string): void {
     this.workspace.set(ws);
     this.statFilter.set(null);
@@ -240,30 +335,38 @@ export class WfDashboardPage {
     switch (act) {
       case 'approve':
         this.stateService.answerQuestion(gid, 'Approve');
+        this.flash('Plan approved — agent moving to coding');
         break;
       case 'reject':
         this.stateService.answerQuestion(gid, 'Reject');
+        this.flash('Plan rejected', 'var(--wf-red)');
         break;
       case 'start':
         this.stateService.startAgent(gid);
+        this.flash('Agent started');
         break;
       case 'stop':
         this.stateService.stopAgent(gid);
+        this.flash('Agent stopped', 'var(--wf-amber)');
         break;
       case 'classify':
         this.api.classifyTask(gid).subscribe();
+        this.flash('Classifying…');
         break;
-      case 'branch': {
+      case 'branch':
         this.api.getBranchName(gid).subscribe(r => {
-          if (r?.branch) navigator.clipboard.writeText(r.branch);
+          if (r?.branch) {
+            navigator.clipboard.writeText(r.branch);
+            this.flash(`Copied: ${r.branch}`);
+          }
         });
         break;
-      }
       case 'ide': {
         const run = this.stateService.getRunForTask(gid);
         const path = run?.repos?.[0]?.worktree_path;
         if (path) {
           this.api.openInIde(path, { cli: 'code', cliArgs: ['-r'] }).subscribe();
+          this.flash('Opening in VS Code…');
         }
         break;
       }
@@ -271,15 +374,20 @@ export class WfDashboardPage {
   }
 
   toggleDarkMode(): void {
-    this.darkMode.update(v => !v);
+    const next = !this.darkMode();
+    this.darkMode.set(next);
+    localStorage.setItem('wf-dark', String(next));
+    document.documentElement.classList.toggle('ion-palette-dark', next);
   }
 
   onClassify(): void {
     this.api.classifyAll().subscribe();
+    this.flash('AI classification started…');
   }
 
   onSync(): void {
     this.stateService.refreshTasks();
+    this.flash('Synced from Asana');
   }
 
   // Keyboard navigation: j/k or arrow down/up
