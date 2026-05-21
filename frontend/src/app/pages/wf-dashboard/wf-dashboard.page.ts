@@ -21,6 +21,7 @@ import { WfCardsComponent } from './wf-cards/wf-cards.component';
 import { WfDrawerComponent } from './wf-drawer/wf-drawer.component';
 import { WfAction } from './wf-list/wf-list.component';
 import { firstValueFrom } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
 import { WfSettingsComponent, getIdeConfig } from './wf-settings/wf-settings.component';
 import { WfHistoryComponent } from './wf-history/wf-history.component';
 
@@ -254,6 +255,7 @@ export class WfDashboardPage implements OnInit {
   protected stateService = inject(AgentStateService);
   private api = inject(ApiService);
   private router = inject(Router);
+  private http = inject(HttpClient);
 
   // UI state signals
   mode = signal<string>('tasks');
@@ -530,18 +532,9 @@ export class WfDashboardPage implements OnInit {
           }
         });
         break;
-      case 'ide': {
-        const run = this.stateService.getRunForTask(gid);
-        const path = run?.repos?.[0]?.worktree_path;
-        if (path) {
-          const ideId = localStorage.getItem('wf-ide') ?? 'vscode';
-          const idePath = localStorage.getItem('wf-ide-path') ?? '';
-          const ideConfig = getIdeConfig(ideId, idePath);
-          this.api.openInIde(path, ideConfig).subscribe();
-          this.flash(`Opening in ${ideId}…`);
-        }
+      case 'ide':
+        this._openIde(gid);
         break;
-      }
     }
   }
 
@@ -550,6 +543,73 @@ export class WfDashboardPage implements OnInit {
     this.darkMode.set(next);
     localStorage.setItem('wf-dark', String(next));
     document.documentElement.classList.toggle('ion-palette-dark', next);
+  }
+
+  private async _openIde(gid: string): Promise<void> {
+    const ideId = localStorage.getItem('wf-ide') ?? 'vscode';
+    const ideCustomPath = localStorage.getItem('wf-ide-path') ?? '';
+
+    // URL-scheme IDEs open directly from the browser — no server needed.
+    // This bypasses Docker's missing `open` command entirely.
+    const urlSchemes: Record<string, string> = {
+      phpstorm: `phpstorm://open?file=`,
+      webstorm: `webstorm://open?file=`,
+      idea:     `idea://open?file=`,
+      vscode:   `vscode://file/`,
+      cursor:   `cursor://file/`,
+    };
+
+    // Find or create the worktree path
+    let path = this.stateService.getRunForTask(gid)?.repos?.[0]?.worktree_path;
+
+    if (!path) {
+      this.flash('No worktree — creating one…');
+      try {
+        // Get task to find repos
+        const task = this.stateService.tasks().find((t: any) => t.task_gid === gid);
+        if (!task) { this.flash('Task not found', 'var(--wf-red)'); return; }
+
+        // Generate branch name
+        const branchRes = await firstValueFrom(this.api.getBranchName(gid));
+        const slug = branchRes?.branch?.split('/').pop() ?? gid.slice(-8);
+
+        // Find first repo for this task (from area mapping or default)
+        const reposRes = await firstValueFrom(this.api.getRepos());
+        const repo = reposRes?.[0];
+        if (!repo) { this.flash('No repos configured', 'var(--wf-red)'); return; }
+
+        // Create worktree from latest master
+        const wt = await firstValueFrom(
+          this.http.post<{ path: string }>(`/api/worktrees/${gid}`, {
+            repo_id: repo.id,
+            branch_slug: slug,
+          })
+        );
+        path = wt.path;
+        this.flash(`Worktree created: ${slug}`);
+      } catch (e: any) {
+        this.flash(e?.error?.detail || 'Failed to create worktree', 'var(--wf-red)');
+        return;
+      }
+    }
+
+    // Open using URL scheme (works from browser on host regardless of Docker)
+    const scheme = urlSchemes[ideId];
+    if (scheme) {
+      window.open(scheme + encodeURIComponent(path));
+      this.flash(`Opening in ${ideId}…`);
+      return;
+    }
+
+    // Custom IDE path fallback — try server-side open
+    if (ideCustomPath) {
+      this.api.openInIde(path, { cli: ideCustomPath }).subscribe({
+        error: (e: any) => this.flash(e?.error?.detail || 'Failed to open IDE', 'var(--wf-red)'),
+      });
+      this.flash(`Opening in custom IDE…`);
+    } else {
+      this.flash(`No IDE configured — set one in Settings → IDE`, 'var(--wf-amber)');
+    }
   }
 
   private async _startWithBranch(gid: string): Promise<void> {
