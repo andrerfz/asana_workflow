@@ -137,7 +137,9 @@ export class AgentStateService {
         firstValueFrom(this.api.getBranchName(taskGid)),
         firstValueFrom(this.api.getBranchSuggestions(taskGid)),
       ]);
-      const slug = branchRes?.branch ?? '';
+      // API returns full branch path (feature/{gid}/slug) — extract just the slug part
+      const fullBranch = branchRes?.branch ?? '';
+      const slug = fullBranch.split('/').pop() ?? fullBranch;
       const suggestions = suggestionsRes?.branches ?? [];
       const needsModal = suggestions.length > 0 || !!slug;
       return { needsModal, slug, suggestions };

@@ -142,7 +142,12 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
 
     if result is None:
         # Fresh branch from default_branch
-        branch_name = f"feature/{task_gid}/{branch_slug}"
+        # If caller passed the full branch path (e.g. feature/{gid}/slug), use as-is
+        # Otherwise build it from the short slug
+        if branch_slug.startswith(f"feature/{task_gid}/") or branch_slug.startswith(f"fix/{task_gid}/"):
+            branch_name = branch_slug
+        else:
+            branch_name = f"feature/{task_gid}/{branch_slug}"
         branch_check = _run_git(["rev-parse", "--verify", branch_name], cwd=repo_path)
         if branch_check.returncode == 0:
             # Branch exists, create worktree from it
