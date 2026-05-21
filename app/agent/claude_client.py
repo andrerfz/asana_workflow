@@ -38,13 +38,17 @@ def _check_claude_auth() -> dict:
         cli_env = {k: v for k, v in os.environ.items() if k in _ALLOWED_ENV_KEYS}
         result = subprocess.run(
             [cli, "-p", "say ok", "--max-turns", "1", "--output-format", "text",
+             "--model", "claude-haiku-4-5-20251001",
              "--dangerously-skip-permissions"],
             capture_output=True, text=True, timeout=30, env=cli_env,
         )
         if result.returncode == 0:
             return {"authenticated": True}
-        stderr = result.stderr.strip()
-        return {"authenticated": False, "detail": stderr[:200] if stderr else "CLI returned non-zero"}
+        combined = (result.stderr + result.stdout).strip()
+        # "Usage credits required for 1M context" means authenticated but wrong model default
+        if "usage credits" in combined.lower() or "1m context" in combined.lower():
+            return {"authenticated": True, "detail": "Authenticated (usage credits needed for 1M model)"}
+        return {"authenticated": False, "detail": combined[:200] if combined else "CLI returned non-zero"}
     except subprocess.TimeoutExpired:
         return {"authenticated": True, "detail": "CLI responded (slow)"}
     except Exception as e:
