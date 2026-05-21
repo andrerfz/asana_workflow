@@ -99,6 +99,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
             system_prompt=system,
             task_gid=task_gid,
             subprocess_timeout=subprocess_timeout,
+            model="sonnet",
         )
 
         try:
@@ -131,6 +132,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
                 system_prompt=system,
                 task_gid=task_gid,
                 resume_session_id=pending_guide["session_id"],
+                model="sonnet",
                 subprocess_timeout=guide_timeout,
             )
             try:
@@ -223,6 +225,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
                     system_prompt=system,
                     task_gid=task_gid,
                     resume_session_id=session_id,
+                    model="sonnet",
                     subprocess_timeout=min(900.0, timer.remaining if timer else 900.0),  # 15 min for auto-resume
                 )
                 resume_result["_resumed_once"] = True
