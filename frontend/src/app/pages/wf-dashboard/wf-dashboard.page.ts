@@ -559,8 +559,18 @@ export class WfDashboardPage implements OnInit {
       cursor:   `cursor://file/`,
     };
 
-    // Find or create the worktree path
+    // Find worktree path — check in-memory signal first, then API
     let path = this.stateService.getRunForTask(gid)?.repos?.[0]?.worktree_path;
+
+    if (!path) {
+      // Signal may not be populated yet — check API directly
+      try {
+        const wts = await firstValueFrom(
+          this.http.get<{ worktrees: { path: string; repo_id: string }[] }>(`/api/worktrees/${gid}`)
+        );
+        path = wts?.worktrees?.[0]?.path;
+      } catch { /* no worktrees exist yet */ }
+    }
 
     if (!path) {
       this.flash('No worktree — creating one…');

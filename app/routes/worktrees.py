@@ -42,10 +42,17 @@ async def cleanup_worktrees(max_age_days: int = Query(default=7, ge=1)):
 @router.post("/{task_gid}")
 async def create_task_worktree(task_gid: str, body: CreateWorktree):
     """Create a worktree for a task in a specific repo."""
+    import subprocess as _sp
     try:
         result = create_worktree(task_gid, body.repo_id, body.branch_slug)
     except (ValueError, RuntimeError) as e:
         raise HTTPException(400, str(e))
+    except _sp.TimeoutExpired as e:
+        raise HTTPException(504, f"Git command timed out: {e}")
+    except Exception as e:
+        raise HTTPException(500, f"Worktree creation failed: {e}")
+    if result is None:
+        raise HTTPException(500, "Worktree creation returned no result")
     return result
 
 
