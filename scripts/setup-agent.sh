@@ -105,5 +105,19 @@ fi
 
 echo ""
 echo "  ✓ Token saved to $ENV_FILE"
-echo "  ✓ Run 'make recreate' to apply"
+echo ""
+
+# Auto-apply: recreate the container so the new token takes effect immediately
+COMPOSE_FILE="$(dirname "$0")/../docker/docker-compose.yml"
+if [ -f "$COMPOSE_FILE" ] && command -v docker &>/dev/null; then
+  echo "  Applying new token (make recreate)..."
+  echo ""
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+  echo ""
+  echo "  ✓ Container restarted with new token"
+else
+  echo "  ✓ Run 'make recreate' to apply"
+fi
 echo ""
