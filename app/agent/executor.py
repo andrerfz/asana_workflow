@@ -443,7 +443,7 @@ async def _run_agent(task_gid: str, task: dict):
             run = load_agent_run(task_gid)
             run["investigation"] = investigation
             save_agent_run(task_gid, run)
-            task_context += f"\n\n## Investigation Report\n{investigation}"
+            task_context += f"\n\n## Investigation Report\n{investigation[:6000]}"
 
             # Check if investigation recommends additional repos
             try:
@@ -469,7 +469,10 @@ async def _run_agent(task_gid: str, task: dict):
                 save_agent_run(task_gid, run)
                 await _broadcast_state(task_gid)
                 task_context = build_task_context(task, run) + comments_context + subtasks_context + qa_context + branch_state
-                task_context += f"\n\n## Investigation Report\n{investigation}"
+                task_context += f"\n\n## Investigation Report\n{investigation[:6000]}"
+
+        # Brief pause between phases — rapid successive API calls trigger rate limits
+        await asyncio.sleep(3)
 
         # Phase: PLANNING
         update_phase(task_gid, AgentPhase.PLANNING)
@@ -603,7 +606,7 @@ async def _run_agent_resumed(task_gid: str, task: dict, feedback: str,
         task_context = user_instruction + build_task_context(task, run) + comments_context + subtasks_context + branch_state
 
         if prev_investigation:
-            task_context += f"\n\n## Investigation Report (from previous run)\n{prev_investigation}"
+            task_context += f"\n\n## Investigation Report (from previous run)\n{prev_investigation[:6000]}"
         if prev_plan:
             task_context += f"\n\n## Implementation Plan (from previous run)\n{prev_plan}"
 

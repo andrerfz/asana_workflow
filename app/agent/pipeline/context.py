@@ -21,7 +21,8 @@ def build_task_context(task: dict, run: dict) -> str:
         f"Area: {task.get('area', 'N/A')}",
     ]
     if task.get("notes"):
-        parts.append(f"\n## Description\n{task['notes']}")
+        notes = task["notes"][:2000]
+        parts.append(f"\n## Description\n{notes}")
     if task.get("tags"):
         parts.append(f"\nTags: {', '.join(task['tags'])}")
 
@@ -68,24 +69,26 @@ def load_claude_md_guides(run: dict) -> str:
         global_md = Path(PROJECTS_DIR) / "CLAUDE.md"
         if global_md.exists():
             try:
-                content = global_md.read_text()[:5000]
+                content = global_md.read_text()[:4000]
                 guides.append(f"## Global Project Guide (CLAUDE.md)\n{content}")
             except OSError:
                 pass
 
-    # Per-repo CLAUDE.md files (including repos NOT assigned to this task)
-    all_repos = list_repos()
+    # Per-repo CLAUDE.md — only load for repos assigned to this task
+    # Unassigned/related repos are skipped to reduce context size
     task_repo_ids = {r["id"] for r in run.get("repos", [])}
+    all_repos = list_repos()
     for repo_entry in all_repos:
+        if repo_entry["id"] not in task_repo_ids:
+            continue  # skip unassigned repos — saves ~3000 chars each
         repo_path = repo_entry.get("path", "")
         if not repo_path:
             continue
         repo_md = Path(repo_path) / "CLAUDE.md"
         if repo_md.exists():
             try:
-                content = repo_md.read_text()[:3000]
-                label = "assigned" if repo_entry["id"] in task_repo_ids else "related"
-                guides.append(f"## {repo_entry['id']} CLAUDE.md ({label})\n{content}")
+                content = repo_md.read_text()[:2500]
+                guides.append(f"## {repo_entry['id']} CLAUDE.md\n{content}")
             except OSError:
                 pass
 
