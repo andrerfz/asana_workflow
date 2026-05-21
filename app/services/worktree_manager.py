@@ -39,12 +39,21 @@ def get_worktree_path(task_gid: str, repo_id: str) -> Path:
     return wt_path
 
 
-def _copy_local_config_files(repo_root: Path, wt_path: Path) -> None:
-    """Copy .env and *.local files from repo root to the worktree.
+def _is_git_ignored(path: str, cwd: str) -> bool:
+    """Return True if git considers this file ignored (in .gitignore)."""
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", path],
+        cwd=cwd, capture_output=True, timeout=5,
+    )
+    return result.returncode == 0
 
-    These files are git-ignored so they don't exist in a fresh worktree.
-    Without them the agent can't run tests or CLI commands that depend on
-    environment variables or local overrides.
+
+def _copy_local_config_files(repo_root: Path, wt_path: Path) -> None:
+    """Copy git-ignored config files from repo root to the worktree.
+
+    Only copies files that are in .gitignore — skips files tracked by git
+    (e.g. .env.example committed as a template) to avoid untracked conflicts.
+    Without these files the agent can't run tests or CLI commands.
     """
     candidates: list[Path] = []
 
@@ -62,6 +71,11 @@ def _copy_local_config_files(repo_root: Path, wt_path: Path) -> None:
         dest = wt_path / src.name
         if dest.exists():
             continue  # already there (worktree resumed from existing branch)
+        # Only copy if the file is git-ignored — tracked files (.env.example etc.)
+        # are already in the branch checkout and shouldn't be overwritten
+        if not _is_git_ignored(src.name, str(repo_root)):
+            log.debug("Skipping %s — tracked by git, not copying to worktree", src.name)
+            continue
         try:
             shutil.copy2(src, dest)
             log.info("Copied %s → worktree", src.name)
