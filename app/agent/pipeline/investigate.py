@@ -3,7 +3,7 @@ import logging
 import re
 from typing import Optional
 
-from ..claude_client import _run_claude_cli
+from ..claude_client import _run_claude_cli, get_best_model
 from ..state import add_log, _accumulate_cost
 from ...services.repo_manager import list_repos
 from .timer import agent_timers
@@ -146,7 +146,7 @@ async def agent_investigate(task_gid: str, context: str, run: dict) -> Optional[
             allowed_tools=["Read", "Glob", "Grep", "LS", "Bash(git log:*)", "Bash(git diff:*)", "Bash(find:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(wc:*)"],
             system_prompt=system,
             task_gid=task_gid,
-            model="sonnet",  # opus unnecessary now that anchors guide the search
+            model=get_best_model(),  # opus unnecessary now that anchors guide the search
             subprocess_timeout=phase_timeout,
         )
 

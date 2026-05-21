@@ -236,6 +236,9 @@
           </ion-icon>
           <ion-label>
             {{ cliStatus()!.authenticated ? 'Authenticated' : 'Not authenticated' }}
+            <span *ngIf="cliStatus()!.authenticated && $any(cliStatus())['best_model_label']">
+              — using <strong>{{ $any(cliStatus())['best_model_label'] }}</strong>
+            </span>
           </ion-label>
         </ion-item>
       </ion-card-content>

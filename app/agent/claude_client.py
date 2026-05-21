@@ -28,29 +28,70 @@ def _find_claude_cli() -> Optional[str]:
     return shutil.which("claude")
 
 
+# Best model detected for the current token — set at startup / token change
+_best_model: str = "claude-sonnet-4-6"
+
+
+def get_best_model() -> str:
+    """Return the best model available for the current token."""
+    return _best_model
+
+
+def _probe_model(cli: str, cli_env: dict, model: str, timeout: int = 20) -> bool:
+    """Return True if the given model responds without auth/capacity errors."""
+    try:
+        r = subprocess.run(
+            [cli, "-p", "ok", "--max-turns", "1", "--output-format", "text",
+             "--model", model, "--dangerously-skip-permissions"],
+            capture_output=True, text=True, timeout=timeout, env=cli_env,
+        )
+        if r.returncode == 0:
+            return True
+        combined = (r.stderr + r.stdout).lower()
+        # Hard auth failures → not authenticated at all
+        if "not logged in" in combined or "please run" in combined:
+            return False
+        # Capacity/credits errors → model unavailable but token is valid
+        # Treat as "model not available" but don't fail auth
+        return False
+    except subprocess.TimeoutExpired:
+        return True  # responded = available
+    except Exception:
+        return False
+
+
 def _check_claude_auth() -> dict:
-    """Check if Claude Code is authenticated by running a quick CLI test."""
+    """Check authentication and detect the best available model for the current token."""
+    global _best_model
     cli = _find_claude_cli()
     if not cli:
         return {"authenticated": False, "detail": "CLI not found"}
 
+    cli_env = {k: v for k, v in os.environ.items() if k in _ALLOWED_ENV_KEYS}
+
+    # Try models best → fallback
+    candidates = [
+        ("claude-sonnet-4-6",        "Sonnet 4.6"),
+        ("claude-haiku-4-5-20251001", "Haiku 4.5"),
+    ]
+
+    for model_id, model_label in candidates:
+        if _probe_model(cli, cli_env, model_id):
+            _best_model = model_id
+            log.info("[claude] Auth OK — best available model: %s (%s)", model_label, model_id)
+            return {"authenticated": True, "best_model": model_id, "best_model_label": model_label}
+
+    # Nothing worked — check if it's a hard auth failure
     try:
-        cli_env = {k: v for k, v in os.environ.items() if k in _ALLOWED_ENV_KEYS}
-        result = subprocess.run(
-            [cli, "-p", "say ok", "--max-turns", "1", "--output-format", "text",
-             "--model", "claude-haiku-4-5-20251001",
-             "--dangerously-skip-permissions"],
-            capture_output=True, text=True, timeout=30, env=cli_env,
+        r = subprocess.run(
+            [cli, "-p", "ok", "--max-turns", "1", "--output-format", "text",
+             "--model", "claude-haiku-4-5-20251001", "--dangerously-skip-permissions"],
+            capture_output=True, text=True, timeout=20, env=cli_env,
         )
-        if result.returncode == 0:
-            return {"authenticated": True}
-        combined = (result.stderr + result.stdout).strip()
-        # "Usage credits required for 1M context" means authenticated but wrong model default
-        if "usage credits" in combined.lower() or "1m context" in combined.lower():
-            return {"authenticated": True, "detail": "Authenticated (usage credits needed for 1M model)"}
+        combined = (r.stderr + r.stdout).strip()
         return {"authenticated": False, "detail": combined[:200] if combined else "CLI returned non-zero"}
     except subprocess.TimeoutExpired:
-        return {"authenticated": True, "detail": "CLI responded (slow)"}
+        return {"authenticated": True, "detail": "CLI slow but responding"}
     except Exception as e:
         return {"authenticated": False, "detail": str(e)}
 
@@ -85,6 +126,8 @@ def check_claude_code_status() -> dict:
             "authenticated": auth["authenticated"],
             "version": version,
             "path": cli,
+            "best_model": auth.get("best_model", _best_model),
+            "best_model_label": auth.get("best_model_label", ""),
             "error": None if auth["authenticated"] else (
                 auth.get("detail") or "Not logged in. Run 'claude login' on your Mac."
             ),

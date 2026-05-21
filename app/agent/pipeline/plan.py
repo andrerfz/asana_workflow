@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..phases import AgentPhase
-from ..claude_client import _run_claude_cli
+from ..claude_client import _run_claude_cli, get_best_model
 from ..state import add_log, update_phase, load_agent_run, save_agent_run, _accumulate_cost
 from ...services.repo_manager import get_repo
 
@@ -57,7 +57,7 @@ async def agent_plan(task_gid: str, context: str, run: dict) -> Optional[str]:
             allowed_tools=[],
             system_prompt=system,
             task_gid=task_gid,
-            model="sonnet",
+            model=get_best_model(),
             subprocess_timeout=180.0,
         )
 

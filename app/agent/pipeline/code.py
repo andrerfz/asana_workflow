@@ -3,7 +3,7 @@ import logging
 import subprocess
 
 from ..phases import AgentPhase
-from ..claude_client import _run_claude_cli
+from ..claude_client import _run_claude_cli, get_best_model
 from ..state import (
     BASH_BLOCKLIST, CODING_TEST_BLOCK,
     add_log, update_phase, load_agent_run, save_agent_run,
@@ -99,7 +99,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
             system_prompt=system,
             task_gid=task_gid,
             subprocess_timeout=subprocess_timeout,
-            model="sonnet",
+            model=get_best_model(),
         )
 
         try:
@@ -132,7 +132,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
                 system_prompt=system,
                 task_gid=task_gid,
                 resume_session_id=pending_guide["session_id"],
-                model="sonnet",
+                model=get_best_model(),
                 subprocess_timeout=guide_timeout,
             )
             try:
@@ -225,7 +225,7 @@ async def agent_code(task_gid: str, context: str, run: dict, repo_entry: dict) -
                     system_prompt=system,
                     task_gid=task_gid,
                     resume_session_id=session_id,
-                    model="sonnet",
+                    model=get_best_model(),
                     subprocess_timeout=min(900.0, timer.remaining if timer else 900.0),  # 15 min for auto-resume
                 )
                 resume_result["_resumed_once"] = True
