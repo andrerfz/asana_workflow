@@ -240,7 +240,6 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                 _handle_stream_event_tracking(event, task_gid)
                 if event.get("type") == "rate_limit_event":
                     saw_rate_limit = True
-                    log.info("[claude] rate_limit_event raw payload: %s", event)
                 # Stream text chunks to caller if requested
                 if on_text_chunk and event.get("type") == "assistant":
                     content = event.get("message", {}).get("content", [])
@@ -289,28 +288,30 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                         last_action[0] = text[:80].replace("\n", " ")
                     break
         elif etype == "rate_limit_event":
-            last_action[0] = "⏳ rate limit — waiting for API quota..."
-            if tgid:
-                # Extract everything Anthropic sends in the event
-                retry_ms = event.get("retry_after_ms") or event.get("retryAfterMs")
-                limit_type = event.get("limit_type") or event.get("limitType") or event.get("type_")
-                remaining = event.get("remaining") or event.get("requests_remaining")
-                reset_at = event.get("reset_at") or event.get("resetAt")
-                # Build informative message from whatever fields are present
-                parts = ["[claude] Rate limit hit"]
-                if limit_type and limit_type != "rate_limit_event":
-                    parts.append(f"type={limit_type}")
-                if retry_ms:
-                    parts.append(f"retry_after={int(retry_ms/1000)}s")
-                if remaining is not None:
-                    parts.append(f"remaining={remaining}")
-                if reset_at:
-                    parts.append(f"resets_at={reset_at}")
-                # Log full raw event at debug level so nothing is hidden
-                unknown_keys = {k: v for k, v in event.items() if k not in ("type", "retry_after_ms", "retryAfterMs", "limit_type", "limitType", "type_", "remaining", "requests_remaining", "reset_at", "resetAt")}
-                if unknown_keys:
-                    parts.append(f"raw={unknown_keys}")
-                add_log(tgid, " — ".join(parts), "warning")
+            info = event.get("rate_limit_info", event)
+            status = info.get("status", "")
+            is_blocked = status not in ("allowed", "allowed_warning")
+
+            if is_blocked:
+                # Actually blocked — show warning with unblock time
+                resets_at = info.get("resetsAt")
+                limit_type = info.get("rateLimitType", "")
+                unblock_str = ""
+                if resets_at:
+                    try:
+                        from datetime import datetime, timezone
+                        dt = datetime.fromtimestamp(resets_at)
+                        unblock_str = f" — unblocks at {dt.strftime('%H:%M')} local"
+                    except Exception:
+                        unblock_str = f" — resets at {resets_at}"
+                last_action[0] = f"🚫 rate limit BLOCKED ({limit_type}){unblock_str}"
+                if tgid:
+                    add_log(tgid, f"[claude] Rate limit BLOCKED ({limit_type}){unblock_str}", "warning")
+                log.warning("[claude] rate_limit_event BLOCKED task=%s info=%s", tgid, info)
+            else:
+                # Allowed — just a warning, request went through, skip noisy log
+                last_action[0] = "⏳ rate limit warning (allowed, continuing...)"
+                log.debug("[claude] rate_limit_event allowed task=%s status=%s", tgid, status)
 
     # Heartbeat: log "still working..." every 30s + kill if rate-limited too long
     # Max time to wait on a rate limit before giving up (avoids all-night hangs)
