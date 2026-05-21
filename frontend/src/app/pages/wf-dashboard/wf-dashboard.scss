@@ -1516,10 +1516,13 @@ select.wf-input { cursor: pointer; }
 .wf-toast {
   position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
   padding: 10px 16px; background: var(--wf-bg-card);
-  border: 1px solid var(--wf-border-strong); border-radius: var(--wf-rad-pill);
+  border: 1px solid var(--wf-border-strong); border-radius: var(--wf-rad-lg);
   font-size: 12.5px; color: var(--wf-text); z-index: 50;
   box-shadow: 0 12px 32px rgba(0,0,0,.4);
   display: flex; align-items: center; gap: 10px;
+  max-width: min(600px, 90vw);
+  white-space: normal;
+  word-break: break-word;
   animation: wf-toast-in .25s ease-out;
 }
 @keyframes wf-toast-in { from { opacity: 0; transform: translate(-50%, 10px); } }

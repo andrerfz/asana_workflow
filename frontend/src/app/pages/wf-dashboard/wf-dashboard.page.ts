@@ -403,9 +403,9 @@ export class WfDashboardPage implements OnInit {
       await this.stateService.sendGuideMessage(gid, msg);
       this.flash('Guide message sent to agent');
       this.guideClose();
-    } catch (e) {
+    } catch (e: any) {
       console.error('[Guide] send failed', e);
-      this.flash('Failed to send message', 'var(--wf-red)');
+      this.flash(e?.error?.detail || e?.message || 'Failed to send message', 'var(--wf-red)');
       input.disabled = false;
     } finally {
       this.guideSending.set(false);
@@ -427,9 +427,9 @@ export class WfDashboardPage implements OnInit {
       await this.stateService.answerQuestion(gid, `revise:${msg}`);
       this.flash('Revision feedback sent — agent will adjust the plan');
       this.reviseClose();
-    } catch (e) {
+    } catch (e: any) {
       console.error('[Revise] send failed', e);
-      this.flash('Failed to send revision', 'var(--wf-red)');
+      this.flash(e?.error?.detail || e?.message || 'Failed to send revision', 'var(--wf-red)');
       input.disabled = false;
     } finally {
       this.reviseSending.set(false);
@@ -568,9 +568,10 @@ export class WfDashboardPage implements OnInit {
       }
 
       this.flash('Agent started');
-    } catch (e) {
+    } catch (e: any) {
       console.error('[Dashboard] startWithBranch failed', e);
-      this.flash('Failed to start agent', 'var(--wf-red)');
+      const detail = e?.error?.detail || e?.message || 'Failed to start agent';
+      this.flash(detail, 'var(--wf-red)');
     } finally {
       this.startingGids.update(s => { const n = new Set(s); n.delete(gid); return n; });
     }
