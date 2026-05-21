@@ -261,11 +261,20 @@ async def _agent_fix_tests(task_gid: str, repo_entry: dict, error_output: str) -
         except Exception as e:
             log.warning(f"Failed to accumulate cost for test fix: {e}")
 
-        if result["returncode"] == 0:
-            add_log(task_gid, f"[{repo_entry['id']}] Auto-fix attempt completed")
+        rc = result["returncode"]
+        has_result = bool(result.get("text") or result.get("parsed"))
+        rate_limited = result.get("rate_limited", False)
+
+        if rc == 0 or (has_result and rate_limited):
+            # Exit 1 with a captured result + rate limit event = CLI exited non-zero
+            # due to the rate limit encounter, but the agent actually completed its work.
+            if rc != 0:
+                add_log(task_gid, f"[{repo_entry['id']}] Auto-fix exited {rc} but result captured (rate limit during run) — treating as success", "warning")
+            else:
+                add_log(task_gid, f"[{repo_entry['id']}] Auto-fix attempt completed")
             return True
 
-        add_log(task_gid, f"[{repo_entry['id']}] Auto-fix failed (exit {result['returncode']})", "error")
+        add_log(task_gid, f"[{repo_entry['id']}] Auto-fix failed (exit {rc}, has_result={has_result}, rate_limited={rate_limited})", "error")
         return False
 
     except Exception as e:
