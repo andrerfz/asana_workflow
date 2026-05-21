@@ -130,7 +130,7 @@ const BUSY_ACTIONS: Record<string, number> = {
                 <div class="wf-kv-k">Priority</div>
                 <div class="wf-kv-v wf-mono">P{{ task()!.priority }}</div>
               </div>
-              @if (task()!.projects?.length) {
+              @if (task()!.projects.length) {
                 <div class="wf-kv-row">
                   <div class="wf-kv-k">Projects</div>
                   <div class="wf-kv-v" style="display:flex;gap:4px;flex-wrap:wrap">

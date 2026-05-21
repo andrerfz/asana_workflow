@@ -9,7 +9,6 @@ import {
   OnInit,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { AgentStateService } from '../../core/services/agent-state.service';
 import { ApiService } from '../../core/services/api.service';
 import { toWfTask, WfTask, LIVE_PHASES, WF_PHASE_BY_ID } from './wf-task.model';
@@ -40,7 +39,6 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
     WfDrawerComponent,
     WfSettingsComponent,
     WfHistoryComponent,
-    DatePipe,
   ],
   template: `
     <div class="wf-root" [class.wf-theme-light]="darkMode()">

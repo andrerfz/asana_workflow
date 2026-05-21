@@ -41,7 +41,7 @@ interface DayBucket {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
-  imports: [DatePipe, DecimalPipe],
+  imports: [DecimalPipe],
   template: `
 <div class="wf-hist">
 
