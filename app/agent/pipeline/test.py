@@ -261,20 +261,33 @@ async def _agent_fix_tests(task_gid: str, repo_entry: dict, error_output: str) -
         except Exception as e:
             log.warning(f"Failed to accumulate cost for test fix: {e}")
 
+        max_turns = 8
         rc = result["returncode"]
         has_result = bool(result.get("text") or result.get("parsed"))
         rate_limited = result.get("rate_limited", False)
+        num_turns = (result.get("parsed") or {}).get("num_turns", 0)
+        half_turns = (max_turns + 1) // 2  # ceiling division: max=8 → threshold=4
 
-        if rc == 0 or (has_result and rate_limited):
-            # Exit 1 with a captured result + rate limit event = CLI exited non-zero
-            # due to the rate limit encounter, but the agent actually completed its work.
-            if rc != 0:
-                add_log(task_gid, f"[{repo_entry['id']}] Auto-fix exited {rc} but result captured (rate limit during run) — treating as success", "warning")
-            else:
-                add_log(task_gid, f"[{repo_entry['id']}] Auto-fix attempt completed")
+        # Success conditions:
+        # 1. Normal exit 0
+        # 2. Exit 1 due to rate limit but result was captured
+        # 3. Exit 1 but agent completed ≥ half the allowed turns with a result
+        #    (agent did substantial work before being cut off — keep the changes)
+        substantial_work = has_result and num_turns >= half_turns
+
+        if rc == 0:
+            add_log(task_gid, f"[{repo_entry['id']}] Auto-fix attempt completed ({num_turns} turns)")
             return True
 
-        add_log(task_gid, f"[{repo_entry['id']}] Auto-fix failed (exit {rc}, has_result={has_result}, rate_limited={rate_limited})", "error")
+        if has_result and rate_limited:
+            add_log(task_gid, f"[{repo_entry['id']}] Auto-fix exited {rc} (rate limit during {num_turns} turns) — treating as success", "warning")
+            return True
+
+        if substantial_work:
+            add_log(task_gid, f"[{repo_entry['id']}] Auto-fix exited {rc} but completed {num_turns}/{max_turns} turns with result — treating as success", "warning")
+            return True
+
+        add_log(task_gid, f"[{repo_entry['id']}] Auto-fix failed (exit {rc}, turns={num_turns}/{max_turns}, has_result={has_result})", "error")
         return False
 
     except Exception as e:
