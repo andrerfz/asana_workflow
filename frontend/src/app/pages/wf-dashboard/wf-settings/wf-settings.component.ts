@@ -246,6 +246,19 @@ export function getIdeConfig(id: string, customPath: string): { cli?: string; cl
               </div>
             </div>
           </div>
+          <div class="wf-field">
+            <div class="wf-field-l">
+              <div class="wf-field-lbl">Asana poll interval</div>
+              <div class="wf-field-sub">How often to fetch task updates from Asana. Takes effect on next poll cycle — no restart needed.</div>
+            </div>
+            <div class="wf-field-c">
+              <div class="wf-stepper">
+                <button (click)="stepPollInterval(-1)">−</button>
+                <span class="wf-mono">{{ agentSettings().poll_interval_minutes }} min</span>
+                <button (click)="stepPollInterval(1)">+</button>
+              </div>
+            </div>
+          </div>
         </div>
       }
     }
@@ -365,7 +378,7 @@ export class WfSettingsComponent implements OnInit {
   customIdePath = signal(localStorage.getItem('wf-ide-path') ?? '');
 
   // Agent
-  agentSettings = signal<AgentSettings>({ section_on_start: '', section_on_done: '', section_on_error: '', agent_timeout_minutes: 45 });
+  agentSettings = signal<AgentSettings>({ section_on_start: '', section_on_done: '', section_on_error: '', agent_timeout_minutes: 45, poll_interval_minutes: 5 });
   loadingAgent = signal(false);
 
   // Guides
@@ -465,6 +478,13 @@ export class WfSettingsComponent implements OnInit {
     this.agentSettings.update(s => ({
       ...s,
       agent_timeout_minutes: Math.max(5, (s.agent_timeout_minutes ?? 45) + delta),
+    }));
+  }
+
+  stepPollInterval(delta: number): void {
+    this.agentSettings.update(s => ({
+      ...s,
+      poll_interval_minutes: Math.max(1, Math.min(60, (s.poll_interval_minutes ?? 5) + delta)),
     }));
   }
 

@@ -390,6 +390,7 @@ DEFAULT_AGENT_SETTINGS = {
     "section_on_done": "Revisión de código",
     "section_on_error": None,
     "agent_timeout_minutes": 45,
+    "poll_interval_minutes": 5,
 }
 
 

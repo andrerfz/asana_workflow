@@ -27,19 +27,25 @@ from .routes.guides import router as guides_router
 
 log = logging.getLogger(__name__)
 
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_MINUTES", "5")) * 60  # seconds
-
-
 async def _poll_loop():
-    """Background polling: refresh cached tasks from Asana every N minutes."""
+    """Background polling: refresh cached tasks from Asana every N minutes.
+
+    Poll interval is read from agent settings on each iteration so it can be
+    changed from the Settings UI without restarting the container.
+    Falls back to POLL_INTERVAL_MINUTES env var, then 5 minutes.
+    """
     from .services.task_cache import refresh_cache
+    from .agent.state import load_agent_settings
+    env_default = int(os.getenv("POLL_INTERVAL_MINUTES", "5"))
     # Initial fetch on startup
     await refresh_cache()
     while True:
-        await asyncio.sleep(POLL_INTERVAL)
+        settings = load_agent_settings()
+        interval_minutes = settings.get("poll_interval_minutes") or env_default
+        await asyncio.sleep(interval_minutes * 60)
         try:
             await refresh_cache()
-            log.info("Auto-refresh: cache updated")
+            log.info("Auto-refresh: cache updated (interval=%dmin)", interval_minutes)
         except Exception as e:
             log.warning("Auto-refresh failed: %s", e)
 

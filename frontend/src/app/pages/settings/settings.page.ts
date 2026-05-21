@@ -52,7 +52,7 @@ export class SettingsPage implements OnInit {
   readonly savingArea = signal<string | null>(null);
 
   // Agent tab
-  readonly settings = signal<AgentSettings>({ section_on_start: '', section_on_done: '', section_on_error: '', agent_timeout_minutes: 45 });
+  readonly settings = signal<AgentSettings>({ section_on_start: '', section_on_done: '', section_on_error: '', agent_timeout_minutes: 45, poll_interval_minutes: 5 });
   readonly cliStatus = signal<CliStatus | null>(null);
   readonly savingSettings = signal(false);
 

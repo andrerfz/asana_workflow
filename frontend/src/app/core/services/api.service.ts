@@ -21,6 +21,7 @@ export interface AgentSettings {
   section_on_done: string;
   section_on_error: string;
   agent_timeout_minutes: number;
+  poll_interval_minutes: number;
 }
 
 export interface Guide {

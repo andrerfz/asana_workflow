@@ -365,6 +365,8 @@ class AgentSettings(BaseModel):
     section_on_start: Optional[str] = None
     section_on_done: Optional[str] = None
     section_on_error: Optional[str] = None
+    agent_timeout_minutes: Optional[int] = None
+    poll_interval_minutes: Optional[int] = None
 
 
 @router.get("/settings")
