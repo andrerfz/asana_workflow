@@ -566,9 +566,11 @@ export class WfDashboardPage implements OnInit {
       // Signal may not be populated yet — check API directly
       try {
         const wts = await firstValueFrom(
-          this.http.get<{ worktrees: { path: string; repo_id: string }[] }>(`/api/worktrees/${gid}`)
+          this.http.get<{ worktrees: { path: string; repo_id: string; branch: string }[] }>(`/api/worktrees/${gid}`)
         );
-        path = wts?.worktrees?.[0]?.path;
+        // Only use the path if the worktree has a valid branch (not broken/empty)
+        const validWt = wts?.worktrees?.find(w => w.branch && w.branch !== 'unknown');
+        path = validWt?.path;
       } catch { /* no worktrees exist yet */ }
     }
 
