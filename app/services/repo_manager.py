@@ -192,7 +192,11 @@ def check_repo_health(path: str) -> dict:
 
 
 def get_repos_for_area(area: str) -> list[dict]:
-    """Get repo configs mapped to a classifier area."""
+    """Get repo configs mapped to a classifier area.
+
+    Falls back to the first configured repo if the area isn't mapped,
+    so tasks with area='other' or unmapped areas can still be started.
+    """
     data = load_repos()
     mapping = data.get("area_repo_map", AREA_REPO_MAP)
     repo_ids = mapping.get(area, [])
@@ -202,6 +206,13 @@ def get_repos_for_area(area: str) -> list[dict]:
         repo = data["repos"].get(rid)
         if repo:
             result.append({**repo, "id": rid})
+
+    # Fallback: if no repos mapped for this area, return the first configured repo
+    if not result and data["repos"]:
+        first_id, first_repo = next(iter(data["repos"].items()))
+        log.warning("Area '%s' not in mapping — falling back to first repo: %s", area, first_id)
+        result.append({**first_repo, "id": first_id})
+
     return result
 
 
