@@ -214,7 +214,7 @@ const BUSY_ACTIONS: Record<string, number> = {
                             <div class="wf-d-card-h" style="color:var(--wf-green)">Shipped</div>
                             <p>Branch: <span class="wf-mono">{{ task()!.branch }}</span></p>
                             <div class="wf-d-acts">
-                              <button class="wf-btn wf-btn-go" (click)="action.emit('open_pr')">Open PR ↗</button>
+                              <button class="wf-btn wf-btn-go" [disabled]="!task()!.mr_url" (click)="action.emit('open_pr')">{{ task()!.mr_url ? "Open MR ↗" : "MR not created yet" }}</button>
                               <button class="wf-btn" (click)="action.emit('rerun')">Re-run</button>
                             </div>
                           </div>

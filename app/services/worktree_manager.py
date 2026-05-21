@@ -104,6 +104,13 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
         log.info("Worktree already exists: %s", wt_path)
         return get_worktree_status(task_gid, repo_id)
 
+    # Prune stale/locked worktree registrations before creating
+    # Handles "missing but locked worktree" error when directory was deleted
+    # but git still has it registered as locked
+    _run_git(["worktree", "prune"], cwd=repo_path)
+    # Unlock specifically in case prune didn't clear it
+    _run_git(["worktree", "unlock", str(wt_path)], cwd=repo_path)
+
     # Ensure base directory exists
     wt_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -124,10 +131,10 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
             branch_name = base_branch
             local_check = _run_git(["rev-parse", "--verify", branch_name], cwd=repo_path)
             if local_check.returncode == 0:
-                result = _run_git(["worktree", "add", str(wt_path), branch_name], cwd=repo_path)
+                result = _run_git(["worktree", "add", "-f", str(wt_path), branch_name], cwd=repo_path)
             else:
                 result = _run_git(
-                    ["worktree", "add", "-b", branch_name, str(wt_path), remote_ref],
+                    ["worktree", "add", "-f", "-b", branch_name, str(wt_path), remote_ref],
                     cwd=repo_path,
                 )
         else:
@@ -135,7 +142,7 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
             local_check = _run_git(["rev-parse", "--verify", base_branch], cwd=repo_path)
             if local_check.returncode == 0:
                 branch_name = base_branch
-                result = _run_git(["worktree", "add", str(wt_path), branch_name], cwd=repo_path)
+                result = _run_git(["worktree", "add", "-f", str(wt_path), branch_name], cwd=repo_path)
             else:
                 # Branch gone — fall back to fresh branch
                 log.warning("Branch '%s' not found — creating fresh branch instead", base_branch)
@@ -151,7 +158,7 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
         branch_check = _run_git(["rev-parse", "--verify", branch_name], cwd=repo_path)
         if branch_check.returncode == 0:
             # Branch exists, create worktree from it
-            result = _run_git(["worktree", "add", str(wt_path), branch_name], cwd=repo_path)
+            result = _run_git(["worktree", "add", "-f", str(wt_path), branch_name], cwd=repo_path)
         else:
             # Create new branch from origin/default_branch
             base_ref = f"origin/{default_branch}"
@@ -159,7 +166,7 @@ def create_worktree(task_gid: str, repo_id: str, branch_slug: str,
             if ref_check.returncode != 0:
                 base_ref = default_branch
             result = _run_git(
-                ["worktree", "add", "-b", branch_name, str(wt_path), base_ref],
+                ["worktree", "add", "-f", "-b", branch_name, str(wt_path), base_ref],
                 cwd=repo_path,
             )
 

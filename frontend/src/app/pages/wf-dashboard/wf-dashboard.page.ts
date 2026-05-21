@@ -535,6 +535,16 @@ export class WfDashboardPage implements OnInit {
       case 'ide':
         this._openIde(gid);
         break;
+      case 'open_pr': {
+        const task = this.allWfTasks().find(t => t.gid === gid);
+        const url = task?.mr_url;
+        if (url) {
+          window.open(url, '_blank');
+        } else {
+          this.flash('No MR link available yet', 'var(--wf-amber)');
+        }
+        break;
+      }
     }
   }
 

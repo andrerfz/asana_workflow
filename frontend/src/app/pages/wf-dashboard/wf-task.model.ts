@@ -38,6 +38,7 @@ export interface WfTask {
   cost: number;
   branch: string;
   repo: string;
+  mr_url: string | null;
   log: [string, string, string][];  // [time, level, message]
   progress: number;
 }
@@ -65,6 +66,7 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     cost: run?.cost_usd ?? 0,
     branch: firstRepo?.worktree_path ?? '—',
     repo: firstRepo?.id ?? '—',
+    mr_url: (firstRepo as any)?.mr_url ?? null,
     log: (run?.logs ?? []).map(l => [
       new Date(l.timestamp).toLocaleTimeString('en-GB', { hour12: false }).slice(0, 8),
       l.level.toUpperCase(),
