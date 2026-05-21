@@ -39,11 +39,22 @@ def _qa_verdict_is_pass(qa_text: str) -> bool:
     if ambiguous — better to ask than to auto-approve broken code.
     """
     text_lower = qa_text.lower()
+
+    # Explicit "Verdict: PASS/FAIL" pattern
     verdict_match = _re.search(r'verdict[:\s—\-\*]*\s*(pass|fail)', text_lower)
     if verdict_match:
         return verdict_match.group(1) == 'pass'
+
+    # "## **PASS** ✅" or "## PASS" standalone heading
+    if _re.search(r'#{1,3}\s*\*{0,2}\s*pass\s*\*{0,2}', text_lower):
+        # Make sure there's no FAIL heading that overrides it
+        if not _re.search(r'#{1,3}\s*\*{0,2}\s*fail\s*\*{0,2}', text_lower):
+            return True
+
+    # Other clear pass signals
     if 'verdict: pass' in text_lower or '✅ pass' in text_lower or 'ready for delivery' in text_lower:
         return True
+
     return False
 
 
