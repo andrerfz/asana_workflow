@@ -193,6 +193,7 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
                 _handle_stream_event_tracking(event, task_gid)
                 if event.get("type") == "rate_limit_event":
                     saw_rate_limit = True
+                    log.info("[claude] rate_limit_event raw payload: %s", event)
                 # Stream text chunks to caller if requested
                 if on_text_chunk and event.get("type") == "assistant":
                     content = event.get("message", {}).get("content", [])
@@ -243,7 +244,26 @@ async def _run_claude_cli(prompt: str, cwd: str, max_turns: int = 30,
         elif etype == "rate_limit_event":
             last_action[0] = "⏳ rate limit — waiting for API quota..."
             if tgid:
-                add_log(tgid, "[claude] Rate limit hit — pausing until quota resets", "warning")
+                # Extract everything Anthropic sends in the event
+                retry_ms = event.get("retry_after_ms") or event.get("retryAfterMs")
+                limit_type = event.get("limit_type") or event.get("limitType") or event.get("type_")
+                remaining = event.get("remaining") or event.get("requests_remaining")
+                reset_at = event.get("reset_at") or event.get("resetAt")
+                # Build informative message from whatever fields are present
+                parts = ["[claude] Rate limit hit"]
+                if limit_type and limit_type != "rate_limit_event":
+                    parts.append(f"type={limit_type}")
+                if retry_ms:
+                    parts.append(f"retry_after={int(retry_ms/1000)}s")
+                if remaining is not None:
+                    parts.append(f"remaining={remaining}")
+                if reset_at:
+                    parts.append(f"resets_at={reset_at}")
+                # Log full raw event at debug level so nothing is hidden
+                unknown_keys = {k: v for k, v in event.items() if k not in ("type", "retry_after_ms", "retryAfterMs", "limit_type", "limitType", "type_", "remaining", "requests_remaining", "reset_at", "resetAt")}
+                if unknown_keys:
+                    parts.append(f"raw={unknown_keys}")
+                add_log(tgid, " — ".join(parts), "warning")
 
     # Heartbeat: log "still working..." every 30s + kill if rate-limited too long
     # Max time to wait on a rate limit before giving up (avoids all-night hangs)
