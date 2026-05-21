@@ -197,16 +197,16 @@
             </ion-button>
           </ng-container>
 
-          <!-- Stop when running -->
+          <!-- Stop when actively running (not error/cancelled — those need Re-run) -->
           <ion-button fill="clear" size="small" color="danger"
-            *ngIf="state.getRunForTask(task.task_gid)?.is_active"
+            *ngIf="state.getRunForTask(task.task_gid)?.is_active && state.getRunForTask(task.task_gid)?.phase !== 'error' && state.getRunForTask(task.task_gid)?.phase !== 'cancelled'"
             (click)="stopAgent(task.task_gid)">
             <ion-icon slot="icon-only" name="stop-circle-outline"></ion-icon>
           </ion-button>
 
-          <!-- Run when idle -->
+          <!-- Run / Re-run when idle or failed -->
           <ion-button fill="clear" size="small" color="primary"
-            *ngIf="!state.getRunForTask(task.task_gid)?.is_active"
+            *ngIf="!state.getRunForTask(task.task_gid)?.is_active || state.getRunForTask(task.task_gid)?.phase === 'error' || state.getRunForTask(task.task_gid)?.phase === 'cancelled'"
             (click)="startAgent(task.task_gid)">
             <ion-icon slot="icon-only" name="play-circle-outline"></ion-icon>
           </ion-button>
