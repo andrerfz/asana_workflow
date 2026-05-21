@@ -101,8 +101,8 @@ async def generate_branch_name(task_gid: str):
             tipo = "fix"
 
     prompt = (
-        f"Generate a short git branch slug (2-5 words, lowercase, underscore-separated, English) "
-        f"for this task. Return ONLY the slug, nothing else.\n\n"
+        f"Generate a short git branch slug (2-5 words, lowercase, hyphen-separated, English) "
+        f"for this task. Return ONLY the slug, nothing else. Use hyphens not underscores.\n\n"
         f"Task: {task.get('name', '')}\n"
         f"Description: {(task.get('notes', '') or '')[:200]}"
     )
@@ -127,7 +127,7 @@ async def generate_branch_name(task_gid: str):
         raise HTTPException(502, f"AI error: {resp.text}")
 
     slug = resp.json()["content"][0]["text"].strip().lower()
-    slug = slug.strip("`/ \n").replace(" ", "_").replace("-", "_")
+    slug = slug.strip("`/ \n").replace(" ", "-").replace("_", "-")
     branch = f"{tipo}/{task_gid}/{slug}"
 
     # Save to cache
