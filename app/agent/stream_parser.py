@@ -24,6 +24,16 @@ INFRA_ERROR_PATTERNS = [
     "Could not resolve host",
     "Failed to connect to",
     "cURL error",
+    # PHPUnit / Paratest internals crashing — vendor code, agent cannot fix
+    "ResultPrinter.php",
+    "AbstractPhpProcess.php",
+    "phpunit/phpunit/src",
+    "brianium/paratest/src",
+    "vendor/phpunit",
+    "vendor/brianium",
+    # Paratest outputting CLI usage = it crashed before running any tests
+    "--max-batch-size MAX-BATCH-SIZE",
+    "--passthru-php PASSTHRU-PHP",
 ]
 
 
