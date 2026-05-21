@@ -77,7 +77,7 @@ export interface WfAction {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
               </button>
             }
-            @if (task.phase === 'queued' || task.phase === 'cancelled' || task.phase === 'error') {
+            @if (task.phase === 'queued' || task.phase === 'cancelled' || task.phase === 'error' || task.phase === 'done') {
               <button class="wf-row-mini is-go" aria-label="Start agent" [disabled]="startingGids().has(task.gid)" (click)="emitAction($event, task.gid, 'start')">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               </button>

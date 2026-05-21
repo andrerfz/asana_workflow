@@ -206,7 +206,7 @@
 
           <!-- Run / Re-run when idle or failed -->
           <ion-button fill="clear" size="small" color="primary"
-            *ngIf="!state.getRunForTask(task.task_gid)?.is_active || state.getRunForTask(task.task_gid)?.phase === 'error' || state.getRunForTask(task.task_gid)?.phase === 'cancelled'"
+            *ngIf="!state.getRunForTask(task.task_gid)?.is_active || state.getRunForTask(task.task_gid)?.phase === 'error' || state.getRunForTask(task.task_gid)?.phase === 'cancelled' || state.getRunForTask(task.task_gid)?.phase === 'done'"
             (click)="startAgent(task.task_gid)">
             <ion-icon slot="icon-only" name="play-circle-outline"></ion-icon>
           </ion-button>
