@@ -87,6 +87,11 @@ export interface WfAction {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M17 7H8m9 0v9"/></svg>
               </button>
             }
+            @if (task.phase === 'done' || task.phase === 'error' || task.phase === 'cancelled') {
+              <button class="wf-row-mini" aria-label="Run QA" (click)="emitAction($event, task.gid, 'run_qa')">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </button>
+            }
             <button class="wf-row-mini" aria-label="Open in IDE" (click)="emitAction($event, task.gid, 'ide')">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
             </button>

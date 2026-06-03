@@ -81,6 +81,9 @@ import { WfAction } from '../wf-list/wf-list.component';
                 @if (task.phase === 'done') {
                   <button class="wf-btn" style="padding:4px 10px; font-size:11px" (click)="emitAction($event, task.gid, 'open_pr')">Open PR ↗</button>
                 }
+                @if (task.phase === 'done' || task.phase === 'error' || task.phase === 'cancelled') {
+                  <button class="wf-btn" style="padding:4px 10px; font-size:11px" (click)="emitAction($event, task.gid, 'run_qa')">Run QA</button>
+                }
                 <button class="wf-row-mini" aria-label="Open in IDE" (click)="emitAction($event, task.gid, 'ide')">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
                 </button>
