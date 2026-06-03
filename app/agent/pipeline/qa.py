@@ -142,10 +142,10 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
                 stat = stat_result.stdout.strip() if stat_result.returncode == 0 else ""
 
                 diff_result = subprocess.run(
-                    ["git", "diff", f"origin/{default_branch}...HEAD"],
+                    ["git", "diff", "-U10", f"origin/{default_branch}...HEAD"],
                     cwd=wt_path, capture_output=True, text=True, timeout=30
                 )
-                full_diff = diff_result.stdout[:15000] if diff_result.returncode == 0 else ""
+                full_diff = diff_result.stdout[:20000] if diff_result.returncode == 0 else ""
 
                 diff_context += (
                     f"\n### Repo: {repo_id}\n"
@@ -221,7 +221,11 @@ async def agent_qa_review(task_gid: str, task: dict, run: dict,
             f"1. **Requirements** — For each subtask, state DONE / PARTIAL / MISSING\n"
             f"2. **Real Bugs Only** — Flag actual bugs: logic errors, SQL injection, data corruption, crashes. "
             f"Do NOT flag: code style, hypothetical edge cases, truncated diffs, "
-            f"or files that seem unrelated (the developer may have valid reasons).\n"
+            f"or files that seem unrelated (the developer may have valid reasons). "
+            f"IMPORTANT: The diff only shows changed lines (+/-). Variables or functions used in new lines "
+            f"may be defined in unchanged surrounding code (not shown). Do NOT flag 'undefined variable' "
+            f"unless the variable is both introduced AND used exclusively in `+` lines with no prior definition. "
+            f"When in doubt about a variable's scope, assume it is defined — absence from the diff does not mean absence from the file.\n"
             f"3. **Verdict** — PASS or FAIL.\n"
             f"   - PASS if the core task requirements are met and no real bugs found and no BLOCKING checks failed\n"
             f"   - FAIL for: missing requirements, actual bugs, security issues, OR any failed BLOCKING quality check\n"
