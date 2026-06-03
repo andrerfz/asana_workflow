@@ -16,6 +16,7 @@ from ..agent import (
     trigger_manual_qa, run_manual_tests,
     AGENT_RUNS_DIR,
 )
+from ..agent.claude_client import reset_model_detection
 from ..services.asana_client import fetch_task_stories, fetch_subtasks
 from ..services.task_cache import get_cached_tasks, refresh_cache
 from ..services.repo_manager import set_task_repo_override, load_task_repo_overrides
@@ -31,13 +32,13 @@ _BRANCH_RE = re.compile(
 
 
 class StartAgent(BaseModel):
-    branch_slug: str
+    branch_slug: Optional[str] = None
     base_branch: Optional[str] = None
 
     @field_validator("branch_slug")
     @classmethod
-    def validate_branch_slug(cls, v: str) -> str:
-        if not re.match(r'^[a-zA-Z0-9._/-]{1,80}$', v) or '..' in v:
+    def validate_branch_slug(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and (not re.match(r'^[a-zA-Z0-9._/-]{1,80}$', v) or '..' in v):
             raise ValueError("branch_slug must be 1-80 alphanumeric/._/- chars, no '..'")
         return v
 
@@ -64,7 +65,9 @@ async def get_agents():
 @router.get("/cli-status")
 async def claude_cli_status():
     """Check if Claude Code CLI is installed and authenticated."""
-    return check_claude_code_status()
+    import asyncio as _asyncio
+    reset_model_detection()  # settings page check → always fresh probe
+    return await _asyncio.to_thread(check_claude_code_status)
 
 
 @router.get("/workflow")
@@ -122,8 +125,28 @@ async def start_task_agent(task_gid: str, body: StartAgent):
     if not task:
         raise HTTPException(404, f"Task {task_gid} not found in cache")
 
+    branch_slug = body.branch_slug
+    existing = load_agent_run(task_gid)
+    if not branch_slug and existing:
+        # Re-run: infer slug from existing run's branch (feature/{gid}/{slug})
+        branch = (existing.get("repos") or [{}])[0].get("branch", "")
+        parts = branch.split("/")
+        branch_slug = parts[-1] if len(parts) >= 3 else branch or None
+
+    # If agent is waiting (qa_review / awaiting_approval), stop it before restarting
+    _WAITING_PHASES = {"qa_review", "awaiting_approval"}
+    if existing and existing.get("phase") in _WAITING_PHASES:
+        await stop_agent(task_gid)
+
+    from ..agent.state import _active_workers
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "[start] _active_workers after stop: %s",
+        {k: (v.done(), type(v).__name__) for k, v in _active_workers.items()}
+    )
+
     try:
-        run = await start_agent(task_gid, task, body.branch_slug, base_branch=body.base_branch)
+        run = await start_agent(task_gid, task, branch_slug, base_branch=body.base_branch)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return run

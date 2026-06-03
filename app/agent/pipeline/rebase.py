@@ -3,7 +3,7 @@ import logging
 import subprocess
 
 from ..phases import AgentPhase
-from ..claude_client import _run_claude_cli
+from ..claude_client import _run_claude_cli, get_best_model
 from ..state import BASH_BLOCKLIST, add_log, update_phase, _accumulate_cost
 from ..asana_helpers import _post_asana_comment
 from ...services.repo_manager import get_repo
@@ -68,6 +68,7 @@ async def rebase_from_default(task_gid: str, repo_entry: dict) -> bool:
                 f"{BASH_BLOCKLIST}"
             ),
             task_gid=task_gid,
+            model=get_best_model(),
         )
 
         try:

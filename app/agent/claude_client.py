@@ -30,6 +30,7 @@ def _find_claude_cli() -> Optional[str]:
 
 # Best model detected for the current token — set at startup / token change
 _best_model: str = "claude-sonnet-4-6"
+_model_detected: bool = False  # True after first successful probe; skips re-probing
 
 
 def get_best_model() -> str:
@@ -37,8 +38,17 @@ def get_best_model() -> str:
     return _best_model
 
 
-def _probe_model(cli: str, cli_env: dict, model: str, timeout: int = 20) -> bool:
-    """Return True if the given model responds without auth/capacity errors."""
+def reset_model_detection() -> None:
+    """Force re-probe on next auth check (call after token change)."""
+    global _model_detected
+    _model_detected = False
+
+
+_AUTH_ERRORS = ("not logged in", "please run", "authentication", "unauthorized", "invalid token")
+
+
+def _probe_model(cli: str, cli_env: dict, model: str, timeout: int = 20):
+    """Return True (model OK), None (authenticated but model unavailable), False (not authenticated)."""
     try:
         r = subprocess.run(
             [cli, "-p", "ok", "--max-turns", "1", "--output-format", "text",
@@ -48,40 +58,62 @@ def _probe_model(cli: str, cli_env: dict, model: str, timeout: int = 20) -> bool
         if r.returncode == 0:
             return True
         combined = (r.stderr + r.stdout).lower()
-        # Hard auth failures → not authenticated at all
-        if "not logged in" in combined or "please run" in combined:
-            return False
-        # Capacity/credits errors → model unavailable but token is valid
-        # Treat as "model not available" but don't fail auth
-        return False
+        if any(e in combined for e in _AUTH_ERRORS):
+            return False  # hard auth failure
+        return None  # rate limit / credits / capacity — authenticated but model unavailable
     except subprocess.TimeoutExpired:
         return True  # responded = available
     except Exception:
-        return False
+        return None
 
 
 def _check_claude_auth() -> dict:
     """Check authentication and detect the best available model for the current token."""
-    global _best_model
+    global _best_model, _model_detected
     cli = _find_claude_cli()
     if not cli:
         return {"authenticated": False, "detail": "CLI not found"}
 
     cli_env = {k: v for k, v in os.environ.items() if k in _ALLOWED_ENV_KEYS}
 
-    # Try models best → fallback
+    # After first successful detection, skip re-probing — just verify with known model
+    if _model_detected:
+        result = _probe_model(cli, cli_env, _best_model)
+        if result is True:
+            label = "Sonnet 4.6" if "sonnet" in _best_model else "Haiku 4.5"
+            return {"authenticated": True, "best_model": _best_model, "best_model_label": label}
+        if result is None:
+            # Rate-limited but still authenticated — keep using cached model
+            label = "Sonnet 4.6" if "sonnet" in _best_model else "Haiku 4.5"
+            log.warning("[claude] Rate limited during auth check — assuming still authenticated")
+            return {"authenticated": True, "best_model": _best_model, "best_model_label": label}
+        # Hard auth failure — fall through to full re-probe
+        _model_detected = False
+
+    # Try models best → fallback (only on first call or after hard auth failure)
     candidates = [
         ("claude-sonnet-4-6",        "Sonnet 4.6"),
         ("claude-haiku-4-5-20251001", "Haiku 4.5"),
     ]
 
+    saw_rate_limit = False
     for model_id, model_label in candidates:
-        if _probe_model(cli, cli_env, model_id):
+        result = _probe_model(cli, cli_env, model_id)
+        if result is True:
             _best_model = model_id
+            _model_detected = True
             log.info("[claude] Auth OK — best available model: %s (%s)", model_label, model_id)
             return {"authenticated": True, "best_model": model_id, "best_model_label": model_label}
+        if result is None:
+            saw_rate_limit = True  # authenticated but rate limited
 
-    # Nothing worked — check if it's a hard auth failure
+    if saw_rate_limit:
+        # All models rate-limited — authenticated but can't run right now
+        log.warning("[claude] All models rate-limited — authenticated, using %s", _best_model)
+        return {"authenticated": True, "best_model": _best_model,
+                "best_model_label": "Sonnet 4.6" if "sonnet" in _best_model else "Haiku 4.5"}
+
+    # All probes returned False — hard auth failure
     try:
         r = subprocess.run(
             [cli, "-p", "ok", "--max-turns", "1", "--output-format", "text",

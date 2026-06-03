@@ -58,7 +58,7 @@ async def start_agent(task_gid: str, task: dict, branch_slug: str,
     _active_workers[task_gid] = _sentinel
 
     try:
-        cli_status = check_claude_code_status()
+        cli_status = await asyncio.to_thread(check_claude_code_status)
         if not cli_status["available"]:
             raise ValueError(cli_status["error"])
         if not cli_status["authenticated"]:
@@ -172,7 +172,7 @@ async def resume_agent(task_gid: str, task: dict, feedback: str = "") -> dict:
     _active_workers[task_gid] = _sentinel
 
     try:
-        cli_status = check_claude_code_status()
+        cli_status = await asyncio.to_thread(check_claude_code_status)
         if not cli_status["available"]:
             raise ValueError(cli_status["error"])
 
@@ -228,6 +228,7 @@ async def stop_agent(task_gid: str) -> bool:
             await worker
         except (asyncio.CancelledError, Exception):
             pass
+        _active_workers.pop(task_gid, None)  # ensure cleared even if finally didn't run
         run = load_agent_run(task_gid)
         if run and run.get("phase") != AgentPhase.CANCELLED.value:
             update_phase(task_gid, AgentPhase.CANCELLED)

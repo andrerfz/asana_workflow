@@ -21,8 +21,10 @@ def build_task_context(task: dict, run: dict) -> str:
         f"Area: {task.get('area', 'N/A')}",
     ]
     if task.get("notes"):
-        notes = task["notes"][:2000]
+        notes = task["notes"][:8000]
         parts.append(f"\n## Description\n{notes}")
+        if len(task["notes"]) > 8000:
+            parts.append(f"[...notes truncated, {len(task['notes'])} chars total]")
     if task.get("tags"):
         parts.append(f"\nTags: {', '.join(task['tags'])}")
 

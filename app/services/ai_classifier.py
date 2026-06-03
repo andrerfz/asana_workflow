@@ -75,7 +75,7 @@ CRITICAL RULES:
 - Tasks with a due date get priority boost: overdue = +1, due in ≤2 days = +1.
 
 Respond ONLY with valid JSON, no markdown, no explanation:
-{{"cluster_id": "...", "cluster_name": "...", "cluster_color": "...", "scope_score": N, "priority": N, "area": "...", "reasoning": "one sentence why", "summary": "2-3 sentence actionable summary in Spanish: what is broken, probable root cause, what to fix"}}"""
+{{"cluster_id": "...", "cluster_name": "...", "cluster_color": "...", "scope_score": N, "priority": N, "area": "...", "reasoning": "one sentence why", "summary": "2-3 sentence actionable summary in Spanish. For bugs: what is broken and how to fix it. For features/integrations: what needs to be built, which systems are involved, and the key technical constraint or decision point."}}"""
 
 
 def _build_system_prompt() -> str:
@@ -121,10 +121,10 @@ Type: {tipo}
 Channel: {canal}
 Due date: {due_on}
 Tags: {tags or "none"}
-Description: {notes[:2000] if notes else "none"}"""
+Description: {notes[:5000] if notes else "none"}"""
 
     if extra_context:
-        prompt += f"\nAdditional context:\n{extra_context[:2000]}"
+        prompt += f"\nAdditional context:\n{extra_context[:1000]}"
 
     return prompt
 
@@ -195,7 +195,7 @@ async def ai_classify_task(task: dict, force: bool = False) -> Optional[dict]:
 
     payload = {
         "model": CLAUDE_MODEL,
-        "max_tokens": 512,
+        "max_tokens": 1024,
         "system": _build_system_prompt(),
         "messages": [{"role": "user", "content": user_prompt}],
     }
