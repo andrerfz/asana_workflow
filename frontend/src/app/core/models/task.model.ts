@@ -51,6 +51,7 @@ export interface RepoEntry {
   id: string;
   worktree_path?: string;
   default_branch?: string;
+  branch?: string;
 }
 
 export interface AgentRun {

@@ -14,7 +14,7 @@ export const WF_PHASES = [
 export const WF_PHASE_BY_ID: Record<string, { id: string; label: string; color: string }> =
   Object.fromEntries(WF_PHASES.map(p => [p.id, p]));
 
-export const LIVE_PHASES = ['investigating', 'planning', 'coding', 'testing', 'qa_review'];
+export const LIVE_PHASES = ['investigating', 'planning', 'coding', 'testing'];
 
 export interface WfTask {
   gid: string;
@@ -36,7 +36,8 @@ export interface WfTask {
   plan?: string;
   qa_report?: string;
   cost: number;
-  branch: string;
+  branch: string;       // worktree_path
+  branch_slug: string;  // last segment of the git branch name
   repo: string;
   mr_url: string | null;
   log: [string, string, string][];  // [time, level, message]
@@ -65,6 +66,7 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     qa_report: run?.qa_report,
     cost: run?.cost_usd ?? 0,
     branch: firstRepo?.worktree_path ?? '—',
+    branch_slug: (firstRepo?.branch ?? '').split('/').pop() ?? '',
     repo: firstRepo?.id ?? '—',
     mr_url: (firstRepo as any)?.mr_url ?? null,
     log: (run?.logs ?? []).map(l => [

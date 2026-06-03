@@ -124,9 +124,10 @@ export class AgentStateService {
     if (res?.tasks) this.tasks.set(res.tasks);
   }
 
-  async startAgent(taskGid: string): Promise<void> {
+  async startAgent(taskGid: string, branchSlug?: string): Promise<void> {
+    const body = branchSlug ? { branch_slug: branchSlug } : {};
     const run = await firstValueFrom(
-      this.http.post<AgentRun>(`/api/agent/start/${taskGid}`, {})
+      this.http.post<AgentRun>(`/api/agent/start/${taskGid}`, body)
     );
     this.agentRuns.update(runs => ({ ...runs, [taskGid]: run }));
   }

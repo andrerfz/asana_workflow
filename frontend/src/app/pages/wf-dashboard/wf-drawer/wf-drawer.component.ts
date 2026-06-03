@@ -203,10 +203,25 @@ const BUSY_ACTIONS: Record<string, number> = {
                         }
 
                         @if (ph.id === 'qa_review' && task()!.qa_report) {
-                          <div class="wf-d-card is-ok">
-                            <div class="wf-d-card-h" style="color:var(--wf-green)">QA · PASS</div>
-                            <p>{{ task()!.qa_report }}</p>
-                          </div>
+                          @if (qaPass(task()!.qa_report)) {
+                            <div class="wf-d-card is-ok">
+                              <div class="wf-d-card-h" style="color:var(--wf-green)">QA · PASS</div>
+                              <p>{{ task()!.qa_report }}</p>
+                            </div>
+                            <div class="wf-d-acts">
+                              <button class="wf-btn wf-btn-go" (click)="action.emit('qa_approve')">Ship it ↗</button>
+                              <button class="wf-btn" (click)="action.emit('rerun')">Re-run anyway</button>
+                            </div>
+                          } @else {
+                            <div class="wf-d-card is-warn">
+                              <div class="wf-d-card-h" style="color:var(--wf-red)">QA · FAIL</div>
+                              <p>{{ task()!.qa_report }}</p>
+                            </div>
+                            <div class="wf-d-acts">
+                              <button class="wf-btn wf-btn-warn" (click)="action.emit('rerun')">Re-run</button>
+                              <button class="wf-btn wf-btn-danger" (click)="action.emit('reject')">Reject</button>
+                            </div>
+                          }
                         }
 
                         @if (ph.id === 'done') {
@@ -306,7 +321,7 @@ export class WfDrawerComponent {
 
   readonly isClassified = computed(() => {
     const t = this.task();
-    return !!(t?.cluster && t?.tipo && t?.scope);
+    return !!(t?.ai_summary || t?.ai_reasoning);
   });
 
   private _busy = signal<Set<string>>(new Set());
@@ -327,6 +342,11 @@ export class WfDrawerComponent {
 
   isLive(phase: string): boolean {
     return LIVE_PHASES.includes(phase);
+  }
+
+  qaPass(report: string | undefined): boolean {
+    if (!report) return false;
+    return /PASS/i.test(report) && !/FAIL/i.test(report);
   }
 
   phaseIndex(phaseId: string): number {

@@ -158,7 +158,7 @@ export class ApiService {
     return this.http.post('/api/ai/classify-all', {});
   }
 
-  classifyTask(gid: string): Observable<unknown> {
-    return this.http.post(`/api/ai/classify/${gid}`, {});
+  classifyTask(gid: string, force = false): Observable<unknown> {
+    return this.http.post(`/api/ai/classify/${gid}${force ? '?force=true' : ''}`, {});
   }
 }

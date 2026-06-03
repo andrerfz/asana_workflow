@@ -207,6 +207,30 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         </div>
       }
 
+      <!-- ── IDE REPO SELECTOR ── -->
+      @if (ideRepoOverlay()) {
+        <div class="wf-branch-overlay" (click)="ideRepoOverlay.set(null)">
+          <div class="wf-branch-panel" (click)="$event.stopPropagation()">
+            <div class="wf-branch-head">
+              <span>Open in IDE</span>
+              <button class="wf-btn wf-btn-icon" (click)="ideRepoOverlay.set(null)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="wf-branch-section">
+              <div class="wf-branch-section-lbl">Select repository</div>
+              @for (repo of ideRepoOverlay()!.repos; track repo.id) {
+                <button class="wf-branch-slug-btn" (click)="openIdeRepo(repo.path)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>{{ repo.id }}</span>
+                  <code style="font-size:10px;opacity:0.6;margin-left:auto">{{ repo.branch }}</code>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- ── GUIDE OVERLAY ── -->
       @if (guideOverlay()) {
         <div class="wf-branch-overlay" (click)="guideClose()">
@@ -283,6 +307,9 @@ export class WfDashboardPage implements OnInit {
   // Inline branch selection overlay
   branchModal = signal<{ gid: string; slug: string; suggestions: { branch: string; author: string }[] } | null>(null);
   private _branchResolve: ((base: string | null | 'cancel') => void) | null = null;
+
+  // IDE repo selector (shown when task has multiple repos)
+  ideRepoOverlay = signal<{ gid: string; repos: { id: string; path: string; branch: string }[] } | null>(null);
 
   // Inline guide overlay
   guideOverlay = signal<{ gid: string } | null>(null);
@@ -501,6 +528,17 @@ export class WfDashboardPage implements OnInit {
         this.stateService.answerQuestion(gid, 'Approve');
         this.flash('Plan approved — agent moving to coding');
         break;
+      case 'qa_approve':
+        this.stateService.answerQuestion(gid, 'Approve');
+        this.flash('QA approved — shipping');
+        break;
+      case 'rerun': {
+        const rerunTask = this.allWfTasks().find(t => t.gid === gid);
+        this.stateService.startAgent(gid, rerunTask?.branch_slug || undefined)
+          .then(() => this.flash('Re-run started'))
+          .catch((e: any) => this.flash(e?.error?.detail || e?.message || 'Failed to start agent', 'var(--wf-red)'));
+        break;
+      }
       case 'reject':
         this.stateService.answerQuestion(gid, 'Reject');
         this.flash('Plan rejected', 'var(--wf-red)');
@@ -521,8 +559,11 @@ export class WfDashboardPage implements OnInit {
         this.reviseOverlay.set({ gid });
         break;
       case 'classify':
-        this.api.classifyTask(gid).subscribe();
         this.flash('Classifying…');
+        this.api.classifyTask(gid, true).subscribe({
+          complete: () => { this.stateService.refreshTasks(); this.flash('Classification updated'); },
+          error: () => this.flash('Classification failed', 'var(--wf-red)'),
+        });
         break;
       case 'branch':
         this.api.getBranchName(gid).subscribe(r => {
@@ -531,6 +572,9 @@ export class WfDashboardPage implements OnInit {
             this.flash(`Copied: ${r.branch}`);
           }
         });
+        break;
+      case 'asana':
+        window.open(`https://app.asana.com/0/0/${gid}`, '_blank');
         break;
       case 'ide':
         this._openIde(gid);
@@ -569,8 +613,19 @@ export class WfDashboardPage implements OnInit {
       cursor:   `cursor://file/`,
     };
 
+    // Multi-repo: show selector if more than one repo has a worktree
+    const run = this.stateService.getRunForTask(gid);
+    const allRepos = (run?.repos ?? []).filter(r => r.worktree_path);
+    if (allRepos.length > 1) {
+      this.ideRepoOverlay.set({
+        gid,
+        repos: allRepos.map(r => ({ id: r.id ?? '', path: r.worktree_path ?? '', branch: r.branch ?? '' })),
+      });
+      return;
+    }
+
     // Find worktree path — check in-memory signal first, then API
-    let path = this.stateService.getRunForTask(gid)?.repos?.[0]?.worktree_path;
+    let path = run?.repos?.[0]?.worktree_path;
 
     if (!path) {
       // Signal may not be populated yet — check API directly
@@ -631,6 +686,23 @@ export class WfDashboardPage implements OnInit {
       this.flash(`Opening in custom IDE…`);
     } else {
       this.flash(`No IDE configured — set one in Settings → IDE`, 'var(--wf-amber)');
+    }
+  }
+
+  openIdeRepo(path: string): void {
+    this.ideRepoOverlay.set(null);
+    const ideId = localStorage.getItem('wf-ide') ?? 'vscode';
+    const urlSchemes: Record<string, string> = {
+      phpstorm: `phpstorm://open?file=`,
+      webstorm: `webstorm://open?file=`,
+      idea:     `idea://open?file=`,
+      vscode:   `vscode://file/`,
+      cursor:   `cursor://file/`,
+    };
+    const scheme = urlSchemes[ideId];
+    if (scheme) {
+      window.open(scheme + encodeURIComponent(path));
+      this.flash(`Opening in ${ideId}…`);
     }
   }
 
