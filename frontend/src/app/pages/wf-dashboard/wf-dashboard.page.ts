@@ -539,6 +539,12 @@ export class WfDashboardPage implements OnInit {
           .catch((e: any) => this.flash(e?.error?.detail || e?.message || 'Failed to start agent', 'var(--wf-red)'));
         break;
       }
+      case 'run_qa':
+        this.api.runQA(gid).subscribe({
+          next: () => this.flash('QA review started'),
+          error: (e: any) => this.flash(e?.error?.detail || e?.message || 'Failed to start QA', 'var(--wf-red)'),
+        });
+        break;
       case 'reject':
         this.stateService.answerQuestion(gid, 'Reject');
         this.flash('Plan rejected', 'var(--wf-red)');

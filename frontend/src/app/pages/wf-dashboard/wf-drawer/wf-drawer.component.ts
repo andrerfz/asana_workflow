@@ -230,6 +230,7 @@ const BUSY_ACTIONS: Record<string, number> = {
                             <p>Branch: <span class="wf-mono">{{ task()!.branch }}</span></p>
                             <div class="wf-d-acts">
                               <button class="wf-btn wf-btn-go" [disabled]="!task()!.mr_url" (click)="action.emit('open_pr')">{{ task()!.mr_url ? "Open MR ↗" : "MR not created yet" }}</button>
+                              <button class="wf-btn" (click)="action.emit('run_qa')">Run QA</button>
                               <button class="wf-btn" (click)="action.emit('rerun')">Re-run</button>
                             </div>
                           </div>
@@ -240,6 +241,9 @@ const BUSY_ACTIONS: Record<string, number> = {
                             <div class="wf-d-card-h">{{ task()!.phase === 'done' ? 'Shipped' : task()!.phase === 'cancelled' ? 'Cancelled' : task()!.phase === 'error' ? 'Failed' : 'Queued' }}</div>
                             <div class="wf-d-acts">
                               <button class="wf-btn wf-btn-primary" (click)="action.emit('start')" [disabled]="isStarting()">{{ isStarting() ? 'Starting…' : task()!.phase === 'queued' ? 'Start now' : 'Re-run' }}</button>
+                              @if (['done','error','cancelled'].includes(task()!.phase)) {
+                                <button class="wf-btn" (click)="action.emit('run_qa')">Run QA</button>
+                              }
                             </div>
                           </div>
                         }
