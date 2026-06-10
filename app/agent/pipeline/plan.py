@@ -45,7 +45,11 @@ async def agent_plan(task_gid: str, context: str, run: dict) -> Optional[str]:
             "IMPORTANT: NEVER include merge or rebase steps for other branches in your plan. "
             "Branch references or MR links in the task description are historical context only — "
             "that work is already incorporated in your working branch. "
-            "Focus exclusively on writing new code to solve the task requirements."
+            "Focus exclusively on writing new code to solve the task requirements.\n\n"
+            "TESTING: do NOT prescribe which test command to run per repo — the executor "
+            "selects it automatically from each repo's own committed diff (full mode only "
+            "when that repo's worktree contains migration files). If relevant, state only "
+            "which repo (if any) will contain migration files."
         )
 
         prompt = f"{context}{repo_context}\n\nProduce an implementation plan. Do NOT use tools, just respond directly."
