@@ -7,6 +7,7 @@ Caches results locally to avoid redundant API calls.
 import json
 import hashlib
 import logging
+import re
 from typing import Optional
 
 import httpx
@@ -66,6 +67,7 @@ AREA (pick one — this determines which Git repo the change goes to):
 - other: Doesn't fit above.
 
 IMPORTANT: Web frontend work (CSS, JS, Blade views, planificador, drag-drop UI) belongs to backend_clientes, NOT mobile_app.
+IMPORTANT: The "Asana projects" the task belongs to are the strongest signal for AREA. A task in the "Back Proveedores" project is backend_proveedor even if its text talks about "clientes" — the supplier app manages the supplier's own customers (fichas de cliente, informes de clientes), and those features live in backend_proveedor. Likewise a task in "Back Clientes" is backend_clientes.
 
 CRITICAL RULES:
 - Data integrity errors in financial reports (EBITDA) or traceability reports = ALWAYS P5. Incorrect data in reports is the highest priority.
@@ -92,6 +94,52 @@ def _task_hash(task: dict, comments: str = "") -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
+# Asana project name → area (deterministic, beats the AI's text-based guess).
+# Anchored prefixes so e.g. "Sugerencias optimizaciones clientes" doesn't match.
+PROJECT_AREA_PATTERNS = [
+    (r"^Back\s+Proveedor", "backend_proveedor"),
+    (r"^Back\s+Clientes", "backend_clientes"),
+    (r"^Back\s+API", "backend_api"),
+]
+
+
+def _project_names(task: dict) -> list[str]:
+    return [
+        m["project"].get("name", "")
+        for m in task.get("memberships", [])
+        if m.get("project")
+    ]
+
+
+def _area_from_projects(task: dict) -> Optional[str]:
+    """Area implied by the task's Asana project memberships, if unambiguous."""
+    areas = set()
+    for name in _project_names(task):
+        for pattern, area in PROJECT_AREA_PATTERNS:
+            if re.search(pattern, name, re.IGNORECASE):
+                areas.add(area)
+    return areas.pop() if len(areas) == 1 else None
+
+
+def _apply_area_override(task: dict, result: Optional[dict]) -> Optional[dict]:
+    """
+    If the task's project memberships unambiguously imply an area and the AI
+    picked a different backend area, trust the project. Applied to cached
+    results too, since the cache key doesn't include memberships.
+    """
+    if not result:
+        return result
+    project_area = _area_from_projects(task)
+    ai_area = result.get("area")
+    if project_area and ai_area != project_area and ai_area not in ("mobile_app", "monitoring"):
+        log.warning(
+            "Area override for '%s': AI said %s but projects %s imply %s",
+            task.get("name", "?")[:60], ai_area, _project_names(task), project_area,
+        )
+        result = {**result, "area": project_area, "area_overridden_from": ai_area}
+    return result
+
+
 def _build_task_prompt(task: dict, extra_context: str = "") -> str:
     name = task.get("name") or ""
     # Prefer html_notes (richer) stripped to text, fallback to notes
@@ -114,11 +162,14 @@ def _build_task_prompt(task: dict, extra_context: str = "") -> str:
 
     due_on = task.get("due_on") or "none"
 
+    projects = ", ".join(_project_names(task))
+
     prompt = f"""Classify this task:
 
 Name: {name}
 Type: {tipo}
 Channel: {canal}
+Asana projects: {projects or "none"}
 Due date: {due_on}
 Tags: {tags or "none"}
 Description: {notes[:5000] if notes else "none"}"""
@@ -182,7 +233,7 @@ async def ai_classify_task(task: dict, force: bool = False) -> Optional[dict]:
     if not force:
         cache = load_ai_cache()
         if task_hash in cache:
-            return cache[task_hash]
+            return _apply_area_override(task, cache[task_hash])
 
     headers = {
         "x-api-key": ANTHROPIC_API_KEY,
@@ -236,6 +287,8 @@ async def ai_classify_task(task: dict, force: bool = False) -> Optional[dict]:
             if "cluster_color" not in result:
                 result["cluster_color"] = "#7f8c8d"
 
+            result = _apply_area_override(task, result)
+
             # Cache result
             cache = load_ai_cache()
             cache[task_hash] = result
@@ -262,7 +315,7 @@ async def ai_classify_batch(tasks: list[dict], force: bool = False) -> dict:
     for task in tasks:
         task_hash = _task_hash(task)
         if not force and task_hash in cache:
-            results[task["gid"]] = cache[task_hash]
+            results[task["gid"]] = _apply_area_override(task, cache[task_hash])
         else:
             to_classify.append(task)
 

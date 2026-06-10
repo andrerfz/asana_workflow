@@ -101,8 +101,26 @@ def detect_cluster(name: str, notes: str) -> Optional[dict]:
     return {"id": "standalone", "name": "Standalone", "color": "#7f8c8d"}
 
 
-def detect_area(name: str) -> str:
-    """Detect functional area from task name prefix."""
+# Asana project name → area. Anchored prefixes so e.g.
+# "Sugerencias optimizaciones clientes" doesn't match.
+PROJECT_AREA_PATTERNS = [
+    (r"^Back\s+Proveedor", "backend_proveedor"),
+    (r"^Back\s+Clientes", "backend_clientes"),
+    (r"^Back\s+API", "backend_api"),
+]
+
+
+def detect_area(name: str, task: Optional[dict] = None) -> str:
+    """Detect functional area. Project memberships win over name prefix."""
+    if task:
+        areas = set()
+        for m in task.get("memberships", []):
+            proj_name = (m.get("project") or {}).get("name", "")
+            for pattern, area in PROJECT_AREA_PATTERNS:
+                if re.search(pattern, proj_name, re.IGNORECASE):
+                    areas.add(area)
+        if len(areas) == 1:
+            return areas.pop()
     for pattern, area in AREA_PATTERNS:
         if re.search(pattern, name):
             return area
@@ -256,7 +274,7 @@ def classify_task(task: dict) -> dict:
     notes = task.get("notes") or ""
 
     cluster = detect_cluster(name, notes)
-    area = detect_area(name)
+    area = detect_area(name, task)
     scope = compute_scope_score(task)
     priority = compute_priority(task, cluster, scope)
 
