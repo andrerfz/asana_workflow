@@ -1,10 +1,11 @@
 import { Component, ChangeDetectionStrategy, input, output, signal, ViewEncapsulation, computed } from '@angular/core';
 import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model';
 
-// Actions that show a loading state and block re-click
+// Actions that show a timed loading state and block re-click.
+// 'classify' is NOT here — its loading state is real (isClassifying input,
+// driven by the actual HTTP request in the dashboard page).
 const BUSY_ACTIONS: Record<string, number> = {
   branch: 3000,    // API call + clipboard — ~2s
-  classify: 5000,  // AI call — ~4s
   ide: 1500,       // open command — ~1s
   asana: 1000,     // open link — instant
 };
@@ -45,8 +46,8 @@ const BUSY_ACTIONS: Record<string, number> = {
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M17 7H8m9 0v9"/></svg>
                 Asana
               </button>
-              <button class="wf-d-abtn" [class.is-classified]="isClassified() && !busy('classify')" [disabled]="busy('classify')" (click)="trigger('classify')">
-                @if (busy('classify')) {
+              <button class="wf-d-abtn" [class.is-classified]="isClassified() && !isClassifying()" [disabled]="isClassifying()" (click)="trigger('classify')">
+                @if (isClassifying()) {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:wf-spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>
                   Classifying…
                 } @else if (isClassified()) {
@@ -83,7 +84,12 @@ const BUSY_ACTIONS: Record<string, number> = {
           <div class="wf-d-card wf-d-classif" style="margin-top:12px">
             <div class="wf-d-card-h" style="display:flex;align-items:center;justify-content:space-between">
               <span>Classification</span>
-              @if (isClassified()) {
+              @if (isClassifying()) {
+                <span class="wf-classif-badge is-loading">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:wf-spin .8s linear infinite"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>
+                  classifying…
+                </span>
+              } @else if (isClassified()) {
                 <span class="wf-classif-badge">✓ classified</span>
               } @else {
                 <span class="wf-classif-badge is-missing">not classified</span>
@@ -298,6 +304,7 @@ const BUSY_ACTIONS: Record<string, number> = {
 export class WfDrawerComponent {
   task = input<WfTask | null>(null);
   isStarting = input<boolean>(false);
+  isClassifying = input<boolean>(false);
   action = output<string>();
 
   phases = WF_PHASES;

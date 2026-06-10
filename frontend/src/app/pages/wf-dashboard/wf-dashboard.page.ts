@@ -108,6 +108,7 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         <app-wf-drawer
           [task]="selectedTask()"
           [isStarting]="startingGids().has(selected() ?? '')"
+          [isClassifying]="classifyingAll() || classifyingGids().has(selected() ?? '')"
           (action)="onDrawerAction($event)"
         />
       }
@@ -303,6 +304,10 @@ export class WfDashboardPage implements OnInit {
 
   // Per-task start loading state
   startingGids = signal<Set<string>>(new Set());
+
+  // AI classification loading state (per-task + classify-all)
+  classifyingGids = signal<Set<string>>(new Set());
+  classifyingAll = signal(false);
 
   // Inline branch selection overlay
   branchModal = signal<{ gid: string; slug: string; suggestions: { branch: string; author: string }[] } | null>(null);
@@ -564,13 +569,25 @@ export class WfDashboardPage implements OnInit {
         this.reviseMessage.set('');
         this.reviseOverlay.set({ gid });
         break;
-      case 'classify':
+      case 'classify': {
+        if (this.classifyingGids().has(gid)) break;
+        this.classifyingGids.update(s => new Set([...s, gid]));
+        // Keep the loading state until the refreshed task data is actually in
+        // the UI — clearing on HTTP complete leaves a gap where the spinner is
+        // gone but the Classification block still shows the old text.
+        const doneClassify = () => this.classifyingGids.update(s => { const n = new Set(s); n.delete(gid); return n; });
         this.flash('Classifying…');
         this.api.classifyTask(gid, true).subscribe({
-          complete: () => { this.stateService.refreshTasks(); this.flash('Classification updated'); },
-          error: () => this.flash('Classification failed', 'var(--wf-red)'),
+          complete: async () => {
+            try {
+              await this.stateService.refreshTasks();
+              this.flash('Classification updated');
+            } finally { doneClassify(); }
+          },
+          error: () => { doneClassify(); this.flash('Classification failed', 'var(--wf-red)'); },
         });
         break;
+      }
       case 'branch':
         this.api.getBranchName(gid).subscribe(r => {
           if (r?.branch) {
@@ -738,8 +755,18 @@ export class WfDashboardPage implements OnInit {
   }
 
   onClassify(): void {
-    this.api.classifyAll().subscribe();
+    if (this.classifyingAll()) return;
+    this.classifyingAll.set(true);
     this.flash('AI classification started…');
+    this.api.classifyAll().subscribe({
+      complete: async () => {
+        try {
+          await this.stateService.refreshTasks();
+          this.flash('Classification updated');
+        } finally { this.classifyingAll.set(false); }
+      },
+      error: () => { this.classifyingAll.set(false); this.flash('Classification failed', 'var(--wf-red)'); },
+    });
   }
 
   onSync(): void {

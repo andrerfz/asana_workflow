@@ -1358,6 +1358,17 @@ select.wf-input { cursor: pointer; }
     background: color-mix(in srgb, var(--wf-text-dim) 14%, transparent);
     color: var(--wf-text-mute);
   }
+  &.is-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: color-mix(in srgb, var(--wf-accent) 14%, transparent);
+    color: var(--wf-accent);
+  }
+}
+
+@keyframes wf-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Keep ibtn for any remaining icon-only usage */
