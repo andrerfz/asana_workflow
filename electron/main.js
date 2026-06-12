@@ -108,25 +108,25 @@ async function ensureDockerDaemon() {
 // Returns true if anything was updated. Stashes local changes rather than
 // clobbering them, and refuses to auto-merge a diverged history.
 async function autoUpdate() {
-  if ((await run('git', ['rev-parse', '--is-inside-work-tree'])).code !== 0) return false;
+  if ((await run('git', ['rev-parse', '--is-inside-work-tree'])).code !== 0) return { updated: false };
 
   setStatus('Buscando actualizaciones…');
   if ((await run('git', ['fetch', '--quiet'])).code !== 0) {
     setStatus('Sin conexión para actualizar — continuando.');
-    return false;
+    return { updated: false };
   }
 
   const local = (await run('git', ['rev-parse', '@'])).out;
   const upstream = await run('git', ['rev-parse', '@{u}']);
-  if (upstream.code !== 0) return false;            // no upstream configured
+  if (upstream.code !== 0) return { updated: false };   // no upstream configured
   const remote = upstream.out;
-  if (local === remote) return false;               // already up to date
+  if (local === remote) return { updated: false };      // already up to date
 
   const base = (await run('git', ['merge-base', '@', '@{u}'])).out;
   if (local !== base) {
     // Diverged or ahead of remote — don't touch it automatically.
     setStatus('Hay cambios locales divergentes — me salto la actualización.');
-    return false;
+    return { updated: false };
   }
 
   // Behind remote and fast-forwardable. Protect uncommitted work first.
@@ -140,10 +140,27 @@ async function autoUpdate() {
   const pull = await run('git', ['pull', '--ff-only']);
   if (pull.code !== 0) {
     setStatus('No se pudo actualizar — continuando con la versión actual.');
-    return false;
+    return { updated: false };
   }
   if (dirty) setStatus('Cambios locales guardados en "git stash" (recupéralos con: git stash pop).');
-  return true;
+  // Did the update touch the frontend? Its built bundle is gitignored and the
+  // compose bind-mount shadows the image's build, so we must rebuild it on the
+  // host for the new UI to actually be served.
+  const changed = (await run('git', ['diff', '--name-only', local, '@'])).out;
+  return { updated: true, frontendChanged: /(^|\n)frontend\//.test(changed) };
+}
+
+// Rebuild the Angular bundle on the host. Needed after a UI update: the built
+// bundle is gitignored (so `git pull` doesn't bring it) and the compose
+// bind-mount shadows the image's build with the host's app/static.
+async function rebuildFrontend() {
+  setStatus('Recompilando interfaz…');
+  const fe = path.join(PROJECT_ROOT, 'frontend');
+  if (!require('fs').existsSync(path.join(fe, 'node_modules'))) {
+    await run('npm', ['ci', '--prefer-offline'], { cwd: fe });
+  }
+  const r = await run('npm', ['run', 'build'], { cwd: fe });
+  if (r.code !== 0) console.error('[frontend] build failed:', r.err || r.out);
 }
 
 // Start (or recreate) the backend container. Rebuilds the image when code was
@@ -245,8 +262,11 @@ async function boot() {
     const alreadyUp = await isServerUp(FASTAPI_URL + '/');
 
     await ensureDockerDaemon();
-    const updated = await autoUpdate();
+    const { updated, frontendChanged } = await autoUpdate();
 
+    if (frontendChanged) {
+      await rebuildFrontend();
+    }
     if (!alreadyUp || updated) {
       await startBackend(updated);
     }
