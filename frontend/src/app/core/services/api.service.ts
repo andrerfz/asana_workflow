@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, from } from 'rxjs';
 
 export interface Repo {
   id: string;
@@ -147,6 +147,15 @@ export class ApiService {
   }
 
   openInIde(path: string, ide: { cli?: string; cliArgs?: string[]; app?: string }): Observable<{ status: string }> {
+    // In the desktop app, open the IDE on the host via Electron — the
+    // Dockerised backend has no GUI / no `open`. Fall back to HTTP in a browser.
+    const electron = (window as unknown as { electronAPI?: { openIde: (o: unknown) => Promise<{ ok: boolean; error?: string }> } }).electronAPI;
+    if (electron?.openIde) {
+      return from(electron.openIde({ path, ...ide }).then(r => {
+        if (!r?.ok) throw new Error(r?.error || 'Failed to open IDE');
+        return { status: 'ok' };
+      }));
+    }
     return this.http.post<{ status: string }>('/api/ide/open', { path, ...ide });
   }
 

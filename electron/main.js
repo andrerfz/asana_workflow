@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -194,6 +194,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
@@ -253,6 +254,22 @@ async function pollOAuthUsage() {
     console.error('[oauth-usage] fetch failed:', e.message);
   }
 }
+
+// Open an IDE on the *host* (the Dockerised backend can't — no GUI / no `open`).
+// Mirrors the backend's /api/ide/open contract: { app | cli, cliArgs?, path }.
+ipcMain.handle('open-ide', async (_event, opts = {}) => {
+  const { app: appName, cli, cliArgs = [], path: target } = opts;
+  if (!target) return { ok: false, error: 'No path provided' };
+  let res;
+  if (cli) {
+    res = await run(cli, [...cliArgs, target]);          // e.g. code -r <path>
+  } else if (appName) {
+    res = await run('open', ['-a', appName, target]);     // e.g. JetBrains via `open -a`
+  } else {
+    res = await run('open', [target]);
+  }
+  return res.code === 0 ? { ok: true } : { ok: false, error: res.err || res.out || `exit ${res.code}` };
+});
 
 async function boot() {
   createSplash();

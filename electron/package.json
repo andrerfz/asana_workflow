@@ -21,6 +21,7 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "splash.html",
       "node_modules/**"
     ]
