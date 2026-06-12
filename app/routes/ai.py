@@ -151,3 +151,42 @@ async def ai_status():
         "available": bool(api_key),
         "model": os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
     }
+
+
+@router.get("/usage")
+async def ai_usage():
+    """Today's real classification spend (paid ANTHROPIC_API_KEY), computed from
+    the usage returned on each API call. Spend, not remaining account credit —
+    the Messages API exposes no balance endpoint."""
+    from ..services.usage_tracker import today_usage
+    return {
+        "model": os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
+        "today": today_usage(),
+    }
+
+
+@router.get("/claude-usage")
+async def claude_usage():
+    """Local, honest Claude Code subscription usage insights for the last 24h
+    (what's contributing to limit usage). NOT a quota % — the real /status
+    figures need the user:profile OAuth scope the headless token lacks."""
+    from ..services.claude_usage import usage_insights
+    return usage_insights()
+
+
+@router.get("/oauth-usage")
+async def oauth_usage():
+    """Real subscription quota (session 5h + weekly), as shown by `/status`.
+    Sourced from /api/oauth/usage via the interactive token, which only the host
+    can read (macOS Keychain) — the Electron app writes it to data/ for us."""
+    import json
+    from datetime import datetime, timezone
+    from ..config import DATA_DIR
+    f = (DATA_DIR / "oauth_usage.json") if hasattr(DATA_DIR, "__truediv__") else None
+    try:
+        blob = json.loads(f.read_text())
+        fetched = datetime.fromisoformat(blob["fetched_at"].replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - fetched).total_seconds()
+        return {"available": True, "stale": age > 600, "fetched_at": blob["fetched_at"], "usage": blob["usage"]}
+    except Exception:
+        return {"available": False, "stale": True, "fetched_at": None, "usage": None}

@@ -1,5 +1,5 @@
 import { Component, ChangeDetectionStrategy, input, output, signal, ViewEncapsulation, computed } from '@angular/core';
-import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES } from '../wf-task.model';
+import { WfTask, WF_PHASES, WF_PHASE_BY_ID, LIVE_PHASES, modelLabel } from '../wf-task.model';
 
 // Actions that show a timed loading state and block re-click.
 // 'classify' is NOT here — its loading state is real (isClassifying input,
@@ -69,6 +69,10 @@ const BUSY_ACTIONS: Record<string, number> = {
             <span>P{{ task()!.priority }} · S{{ task()!.scope }}</span>
             <span class="wf-row-sep">·</span>
             <span>{{ task()!.section }}</span>
+            @if (modelLabel(task()!.model); as ml) {
+              <span class="wf-row-sep">·</span>
+              <span title="Model that executed this run" style="color:var(--wf-accent,#5b8cff);font-weight:600">⚡ {{ ml }}</span>
+            }
           </div>
         </div>
 
@@ -325,6 +329,7 @@ export class WfDrawerComponent {
   planOpen = signal(false);
 
   phases = WF_PHASES;
+  modelLabel = modelLabel;
 
   onResizeStart(e: MouseEvent): void {
     e.preventDefault();

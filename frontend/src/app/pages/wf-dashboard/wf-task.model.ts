@@ -16,6 +16,20 @@ export const WF_PHASE_BY_ID: Record<string, { id: string; label: string; color: 
 
 export const LIVE_PHASES = ['investigating', 'planning', 'coding', 'testing'];
 
+/** Friendly label for a raw model id, e.g. "claude-sonnet-4-6" → "Sonnet 4.6". */
+export function modelLabel(model?: string | null): string | null {
+  if (!model) return null;
+  const m = model.toLowerCase();
+  const tier = m.includes('opus') ? 'Opus'
+    : m.includes('sonnet') ? 'Sonnet'
+    : m.includes('haiku') ? 'Haiku'
+    : m.includes('fable') ? 'Fable'
+    : null;
+  if (!tier) return model;
+  const ver = m.match(/(\d+)-(\d+)/);  // 4-6 → 4.6
+  return ver ? `${tier} ${ver[1]}.${ver[2]}` : tier;
+}
+
 export interface WfTask {
   gid: string;
   name: string;
@@ -36,6 +50,7 @@ export interface WfTask {
   plan?: string;
   qa_report?: string;
   cost: number;
+  model: string | null;  // model that executed the run (badge)
   branch: string;       // worktree_path
   branch_slug: string;  // last segment of the git branch name
   repo: string;
@@ -65,6 +80,7 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     plan: run?.plan,
     qa_report: run?.qa_report,
     cost: run?.cost_usd ?? 0,
+    model: run?.model ?? null,
     branch: firstRepo?.worktree_path ?? '—',
     branch_slug: (firstRepo?.branch ?? '').split('/').pop() ?? '',
     repo: firstRepo?.id ?? '—',

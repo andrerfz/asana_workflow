@@ -68,6 +68,7 @@ export interface AgentRun {
   updated_at?: string;
   error?: string;
   cost_usd?: number;
+  model?: string | null;
 }
 
 export type AgentPhase =

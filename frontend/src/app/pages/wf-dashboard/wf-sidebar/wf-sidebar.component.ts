@@ -1,4 +1,5 @@
-import { Component, ChangeDetectionStrategy, input, output, ViewEncapsulation, computed } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output, ViewEncapsulation, computed, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { WfTask, LIVE_PHASES, WF_PHASE_BY_ID } from '../wf-task.model';
 import { WfStats } from '../wf-header/wf-header.component';
 
@@ -97,15 +98,48 @@ import { WfStats } from '../wf-header/wf-header.component';
         }
       </nav>
 
-      <!-- BUDGET FOOT -->
+      <!-- USAGE FOOT -->
       <div class="wf-side-foot">
-        <div class="wf-foot-row">
-          <span>Spend today</span>
-          <span class="wf-mono"><b>{{ '$' + stats().cost.toFixed(2) }}</b> / $10.00</span>
+        <div class="wf-foot-row" title="Real Anthropic API spend today (paid key — AI classification only), from the usage on each call">
+          <span>AI classify <span style="opacity:.55">· API</span></span>
+          <span class="wf-mono"><b>{{ fmtUsd(apiSpend()) }}</b></span>
         </div>
-        <div class="wf-foot-bar">
-          <div class="wf-foot-bar-fill" [style.width.%]="Math.min(100, (stats().cost / 10) * 100)"></div>
+        <div class="wf-foot-row" style="margin-top:4px" title="Local tally of agent run cost (Claude Code subscription — not account credit)">
+          <span>Agent runs <span style="opacity:.55">· sub</span></span>
+          <span class="wf-mono">{{ '$' + stats().cost.toFixed(2) }}</span>
         </div>
+        @if (quota(); as q) {
+          @if (q.available && q.usage) {
+            <div class="wf-foot-row" style="margin-top:8px">
+              <span>Claude quota <span style="opacity:.55">· real</span></span>
+              @if (q.stale) { <span style="font-size:10px;opacity:.5">stale</span> }
+            </div>
+            @for (g of gauges(q.usage); track g.key) {
+              <div class="wf-foot-row" style="margin-top:4px;font-size:11px" [title]="g.title">
+                <span style="opacity:.75">{{ g.label }}</span>
+                <span class="wf-mono" [style.color]="g.color || 'inherit'">{{ g.pct }}%<span style="opacity:.5"> · {{ g.reset }}</span></span>
+              </div>
+              <div class="wf-foot-bar" style="margin-top:2px">
+                <div class="wf-foot-bar-fill" [style.width.%]="Math.min(100, g.pct)" [style.background]="g.color || null"></div>
+              </div>
+            }
+          }
+        }
+        @if (claudeUsage(); as cu) {
+          @if (cu.insights.length) {
+            <div class="wf-foot-row" style="margin-top:10px" [title]="cu.note">
+              <span style="opacity:.8">contributing <span style="opacity:.55">· 24h local</span></span>
+              <span class="wf-mono" style="opacity:.6">~{{ tokensM(cu.tokens_24h) }}M tok</span>
+            </div>
+            @for (ins of cu.insights; track ins.key) {
+              <div class="wf-foot-row" style="margin-top:3px;font-size:11px" [title]="ins.hint">
+                <span style="opacity:.7">{{ ins.label }}</span>
+                <span class="wf-mono" style="opacity:.85">{{ ins.pct }}%</span>
+              </div>
+            }
+            <div style="font-size:9px;opacity:.4;margin-top:4px;line-height:1.3">Local estimate, not your real quota</div>
+          }
+        }
       </div>
     </aside>
   `,
@@ -122,6 +156,63 @@ export class WfSidebarComponent {
   selectedChange = output<string>();
 
   protected Math = Math;
+
+  /** Real classification API spend today (paid key), fetched from the backend. */
+  apiSpend = signal(0);
+  /** Local Claude Code usage insights (last 24h) — honest, not a quota %. */
+  claudeUsage = signal<{ tokens_24h: number; note: string; insights: { key: string; label: string; pct: number; hint: string }[] } | null>(null);
+  /** Real subscription quota (session 5h + weekly), via the Electron host bridge. */
+  quota = signal<{ available: boolean; stale: boolean; usage: any } | null>(null);
+
+  constructor(private http: HttpClient) {
+    this.refreshUsage();
+    // Refresh periodically so the figures stay current.
+    setInterval(() => this.refreshUsage(), 60_000);
+  }
+
+  private refreshUsage(): void {
+    this.http.get<{ today: { cost_usd: number } }>('/api/ai/usage').subscribe({
+      next: r => this.apiSpend.set(r?.today?.cost_usd ?? 0),
+      error: () => {},
+    });
+    this.http.get<{ tokens_24h: number; note: string; insights: { key: string; label: string; pct: number; hint: string }[] }>('/api/ai/claude-usage').subscribe({
+      next: r => this.claudeUsage.set(r),
+      error: () => {},
+    });
+    this.http.get<{ available: boolean; stale: boolean; usage: any }>('/api/ai/oauth-usage').subscribe({
+      next: r => this.quota.set(r),
+      error: () => {},
+    });
+  }
+
+  tokensM(t: number): string {
+    return (t / 1_000_000).toFixed(t >= 10_000_000 ? 0 : 1);
+  }
+
+  /** Build the displayable quota gauges from the /api/oauth/usage payload. */
+  gauges(u: any): { key: string; label: string; pct: number; reset: string; color: string | null; title: string }[] {
+    const color = (p: number) => p >= 95 ? '#ef4444' : p >= 80 ? '#fbbf24' : null;
+    const g: any[] = [];
+    if (u?.five_hour) g.push({ key: 'session', label: 'Session 5h', pct: Math.round(u.five_hour.utilization), reset: this.fmtReset(u.five_hour.resets_at), color: color(u.five_hour.utilization), title: 'Current 5-hour session window' });
+    if (u?.seven_day) g.push({ key: 'week', label: 'Week · all', pct: Math.round(u.seven_day.utilization), reset: this.fmtReset(u.seven_day.resets_at), color: color(u.seven_day.utilization), title: 'Current week, all models' });
+    if (u?.seven_day_sonnet) g.push({ key: 'week-sonnet', label: 'Week · Sonnet', pct: Math.round(u.seven_day_sonnet.utilization), reset: this.fmtReset(u.seven_day_sonnet.resets_at), color: color(u.seven_day_sonnet.utilization), title: 'Current week, Sonnet only' });
+    const ex = u?.extra_usage;
+    if (ex?.is_enabled) g.push({ key: 'extra', label: 'Extra usage', pct: Math.round(ex.utilization), reset: `${Math.round(ex.used_credits)}/${ex.monthly_limit}${ex.currency === 'EUR' ? '€' : ''}`, color: color(ex.utilization), title: 'Monthly extra-usage credits' });
+    return g;
+  }
+
+  fmtReset(iso: string | null): string {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      const sameDay = d.toDateString() === new Date().toDateString();
+      return sameDay
+        ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    } catch {
+      return '—';
+    }
+  }
 
   liveTasks = computed(() =>
     this.tasks().filter(t => LIVE_PHASES.includes(t.phase))
@@ -145,6 +236,12 @@ export class WfSidebarComponent {
     }
     return Object.entries(countMap).map(([name, count]) => ({ name, count }));
   });
+
+  /** Show cents with 2 decimals, but keep precision for sub-cent spend. */
+  fmtUsd(v: number): string {
+    if (v > 0 && v < 0.01) return '$' + v.toFixed(4);
+    return '$' + v.toFixed(2);
+  }
 
   phaseColor(phase: string): string {
     return WF_PHASE_BY_ID[phase]?.color ?? '#6b7280';

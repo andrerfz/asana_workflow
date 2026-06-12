@@ -260,6 +260,14 @@ async def ai_classify_task(task: dict, force: bool = False) -> Optional[dict]:
                 return None
 
             body = resp.json()
+
+            # Record real API spend (paid ANTHROPIC_API_KEY) from the usage block.
+            try:
+                from .usage_tracker import record_api_usage
+                record_api_usage(CLAUDE_MODEL, body.get("usage", {}))
+            except Exception:
+                pass
+
             text = body["content"][0]["text"].strip()
 
             # Strip markdown code fences if present

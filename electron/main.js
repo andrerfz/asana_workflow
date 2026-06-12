@@ -197,6 +197,46 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
+// --- Claude Code subscription usage bridge -------------------------------
+// The real session/weekly quota (what `/status` shows) comes from
+// /api/oauth/usage, which needs the `user:profile` OAuth scope. Only the
+// interactive login token (stored in the macOS Keychain) has it — and only the
+// host can read the Keychain. So Electron (host) fetches it and writes it to
+// data/ for the Dockerised backend to serve.
+function httpsGetJson(url, headers) {
+  return new Promise((resolve, reject) => {
+    require('https').get(url, { headers }, res => {
+      let body = '';
+      res.on('data', c => { body += c; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 200)}`));
+        try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+}
+
+async function pollOAuthUsage() {
+  if (process.platform !== 'darwin') return;  // Keychain read is macOS-only
+  try {
+    const cred = await run('security', ['find-generic-password', '-s', 'Claude Code-credentials', '-w']);
+    if (cred.code !== 0 || !cred.out) return;
+    const oauth = (JSON.parse(cred.out).claudeAiOauth) || JSON.parse(cred.out);
+    const token = oauth.accessToken;
+    if (!token) return;
+    const usage = await httpsGetJson('https://api.anthropic.com/api/oauth/usage', {
+      Authorization: `Bearer ${token}`,
+      'anthropic-beta': 'oauth-2025-04-20',
+      'anthropic-version': '2023-06-01',
+    });
+    const fs = require('fs');
+    const out = path.join(PROJECT_ROOT, 'data', 'oauth_usage.json');
+    fs.writeFileSync(out, JSON.stringify({ fetched_at: new Date().toISOString(), usage }));
+  } catch (e) {
+    console.error('[oauth-usage] fetch failed:', e.message);
+  }
+}
+
 async function boot() {
   createSplash();
   try {
@@ -221,6 +261,8 @@ async function boot() {
 
 app.whenReady().then(() => {
   boot();
+  pollOAuthUsage();
+  setInterval(pollOAuthUsage, 120_000);  // keep the quota snapshot fresh
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) boot();
   });

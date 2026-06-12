@@ -268,6 +268,7 @@ def create_agent_run(task_gid: str, task_name: str, repos: list[dict]) -> dict:
         "token_budget": agent_queue.config["token_budget_per_task"],
         "cost_usd": 0.0,
         "num_api_calls": 0,
+        "model": None,
         "duration_seconds": None,
         "retries": 0,
         "max_retries": 3,
@@ -308,6 +309,18 @@ def _accumulate_cost(task_gid: str, cli_result: dict):
 
     run["cost_usd"] = run.get("cost_usd", 0) + cost
     run["num_api_calls"] = run.get("num_api_calls", 0) + 1
+
+    # Record which model executed this run (the detected best model for the
+    # current token). Lazy import avoids a circular import with claude_client.
+    if not run.get("model"):
+        model = parsed.get("model") if isinstance(parsed, dict) else None
+        if not model:
+            try:
+                from .claude_client import get_best_model
+                model = get_best_model()
+            except Exception:
+                model = None
+        run["model"] = model
 
     save_agent_run(task_gid, run)
 
