@@ -1371,6 +1371,22 @@ select.wf-input { cursor: pointer; }
   to { transform: rotate(360deg); }
 }
 
+/* Collapsible Plan block in drawer */
+.wf-plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  &:hover { color: var(--wf-text); }
+}
+.wf-plan-chevron {
+  display: inline-block;
+  transition: transform .15s;
+  color: var(--wf-text-mute);
+  &.is-open { transform: rotate(90deg); }
+}
+
 /* Keep ibtn for any remaining icon-only usage */
 .wf-d-ibtn {
   all: unset; cursor: pointer;

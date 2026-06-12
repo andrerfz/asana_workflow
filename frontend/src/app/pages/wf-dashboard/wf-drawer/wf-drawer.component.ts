@@ -149,6 +149,20 @@ const BUSY_ACTIONS: Record<string, number> = {
             </div>
           </div>
 
+          <!-- Plan block — visible in every phase once a plan exists.
+               Skipped during awaiting_approval, where the trail already shows it. -->
+          @if (task()!.plan && task()!.phase !== 'awaiting_approval') {
+            <div class="wf-d-card" style="margin-top:12px">
+              <div class="wf-d-card-h wf-plan-head" (click)="planOpen.set(!planOpen())">
+                <span>Plan</span>
+                <span class="wf-plan-chevron" [class.is-open]="planOpen()">▸</span>
+              </div>
+              @if (planOpen()) {
+                <pre class="wf-plan-text">{{ task()!.plan }}</pre>
+              }
+            </div>
+          }
+
           <div class="wf-d-card-h" style="margin-top:14px; padding-left:0">Workflow</div>
           <div class="wf-trail">
             @for (ph of phases; track ph.id; let i = $index) {
@@ -306,6 +320,9 @@ export class WfDrawerComponent {
   isStarting = input<boolean>(false);
   isClassifying = input<boolean>(false);
   action = output<string>();
+
+  // Plan block expand/collapse (collapsed by default to keep live logs in view)
+  planOpen = signal(false);
 
   phases = WF_PHASES;
 
