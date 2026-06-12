@@ -1,0 +1,20 @@
+#!/bin/sh
+# Auto-rebuild & reinstall the desktop app when the Electron shell changes.
+#
+# The packaged .app is just a launcher; repo content (frontend/backend) is
+# picked up automatically at launch via `git pull`. Only the shell itself
+# (main.js / splash.html / package.json) needs a recompile + reinstall, so we
+# only do the expensive build when one of those actually changed on master.
+#
+# Installed by `make install-hooks`. Runs after every `git merge` / `git pull`.
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+[ "$branch" = "master" ] || [ "$branch" = "main" ] || exit 0
+
+# ORIG_HEAD = the commit we were on before this merge/pull.
+changed=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null)
+echo "$changed" | grep -qE '^electron/(main\.js|splash\.html|package\.json)$' || exit 0
+
+root=$(git rev-parse --show-toplevel)
+echo "[post-merge] Electron shell changed on $branch — rebuilding desktop app…"
+make -C "$root" electron-install

@@ -6,7 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 # Configure logging so all loggers (including agent_worker) output to stderr/Docker logs
@@ -135,7 +135,17 @@ async def index():
 
 @app.get("/{full_path:path}")
 async def spa_fallback(full_path: str):
-    """Serve Angular index.html for all non-API routes (SPA client-side routing)."""
+    """Serve built Angular assets (the index references them at the root, e.g.
+    /main.<hash>.js), falling back to index.html for client-side routes."""
+    # Angular's index.html uses <base href="/">, so hashed assets are requested
+    # at the root rather than under /static. Serve the real file when it exists
+    # (with the correct MIME type), otherwise return index.html for SPA routing.
+    if full_path:
+        candidate = (STATIC_DIR / full_path).resolve()
+        # Guard against path traversal: keep the resolved path inside STATIC_DIR.
+        if candidate.is_file() and STATIC_DIR.resolve() in candidate.parents:
+            return FileResponse(candidate)
+
     index = STATIC_DIR / "index.html"
     if not index.exists():
         from fastapi import HTTPException

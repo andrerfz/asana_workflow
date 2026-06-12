@@ -1,4 +1,4 @@
-.PHONY: help build up down restart recreate logs shell clean dev dev-ui setup setup-agent test frontend electron-start
+.PHONY: help build up down restart recreate logs shell clean dev dev-ui setup setup-agent test frontend electron-start electron-build electron-install install-hooks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -87,6 +87,29 @@ frontend: ## Build Angular/Ionic frontend (outputs to app/static/)
 
 electron-start: ## Run desktop app (FastAPI + Electron window)
 	cd electron && npm start
+
+electron-build: ## Compile the macOS desktop app (.dmg + .zip + .app)
+	@cd electron && [ -d node_modules ] || npm install
+	cd electron && npm run dist
+	@echo ""
+	@echo "\033[1;32m  Built → electron/dist/\033[0m"
+	@echo ""
+
+electron-install: ## Build the .app and install it into /Applications (overwrites)
+	@cd electron && [ -d node_modules ] || npm install
+	cd electron && npm run pack
+	rm -rf "/Applications/Asana Workflow.app"
+	cp -R "electron/dist/mac-arm64/Asana Workflow.app" "/Applications/Asana Workflow.app"
+	@xattr -dr com.apple.quarantine "/Applications/Asana Workflow.app" 2>/dev/null || true
+	@echo ""
+	@echo "\033[1;32m  Installed → /Applications/Asana Workflow.app\033[0m"
+	@echo ""
+
+install-hooks: ## Install git hooks (auto-rebuild desktop app when electron/ changes on master)
+	@mkdir -p .git/hooks
+	@cp scripts/hooks/post-merge .git/hooks/post-merge
+	@chmod +x .git/hooks/post-merge
+	@echo "\033[1;32m  Installed post-merge hook → .git/hooks/post-merge\033[0m"
 
 # --- Tests ---
 

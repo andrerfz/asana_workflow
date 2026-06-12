@@ -21,11 +21,8 @@
     },
     "files": [
       "main.js",
+      "splash.html",
       "node_modules/**"
-    ],
-    "extraResources": [
-      { "from": "../app", "to": "app" },
-      { "from": "../requirements.txt", "to": "requirements.txt" }
     ]
   }
 }

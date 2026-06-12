@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 22px;
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #0f1115; color: #e6e6e6;
+      -webkit-user-select: none; user-select: none;
+    }
+    .logo {
+      width: 56px; height: 56px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; font-weight: 700;
+      background: linear-gradient(135deg, #0054e9, #6030ff); color: #fff;
+    }
+    .title { font-size: 16px; font-weight: 600; }
+    .spinner {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #5b8cff;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #status { font-size: 13px; color: #9aa0aa; min-height: 18px; text-align: center; max-width: 80%; }
+    #error {
+      display: none; font-size: 12px; color: #ff6b6b;
+      white-space: pre-wrap; text-align: center; max-width: 86%;
+      background: rgba(255,107,107,0.08); padding: 10px 14px; border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">A</div>
+  <div class="title">Asana Workflow</div>
+  <div class="spinner" id="spinner"></div>
+  <div id="status">Iniciando…</div>
+  <div id="error"></div>
+  <script>
+    window.setStatus = (msg) => { document.getElementById('status').textContent = msg; };
+    window.showError = (msg) => {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('status').textContent = 'No se pudo arrancar';
+      const e = document.getElementById('error');
+      e.style.display = 'block';
+      e.textContent = msg;
+    };
+  </script>
+</body>
+</html>
