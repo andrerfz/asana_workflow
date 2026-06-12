@@ -257,14 +257,40 @@ async function pollOAuthUsage() {
 
 // Open an IDE on the *host* (the Dockerised backend can't — no GUI / no `open`).
 // Mirrors the backend's /api/ide/open contract: { app | cli, cliArgs?, path }.
+//
+// SECURITY: the renderer (which displays untrusted Asana content) sends these
+// values, so we never run an arbitrary binary. The CLI/app must be a known IDE
+// (allowlist), the binary is resolved by basename from PATH (a supplied path is
+// ignored), CLI args are restricted to a few safe window flags, and the target
+// must be an absolute path — so it can never be parsed as an option.
+const IDE_CLI_ALLOW = new Set([
+  'code', 'code-insiders', 'cursor', 'codium', 'vscodium', 'subl', 'zed', 'windsurf',
+  'idea', 'pycharm', 'phpstorm', 'webstorm', 'rubymine', 'goland', 'clion', 'rider', 'fleet',
+  'nvim', 'vim', 'emacs',
+]);
+const IDE_APP_ALLOW = new Set([
+  'phpstorm', 'webstorm', 'pycharm', 'pycharm professional edition', 'pycharm community edition',
+  'intellij idea', 'intellij idea ultimate', 'intellij idea community edition',
+  'rubymine', 'goland', 'clion', 'rider', 'fleet',
+  'visual studio code', 'vscodium', 'cursor', 'zed', 'sublime text', 'windsurf',
+]);
+const IDE_SAFE_FLAGS = new Set(['-r', '-n', '-g', '-w', '--reuse-window', '--new-window', '--wait']);
+
 ipcMain.handle('open-ide', async (_event, opts = {}) => {
   const { app: appName, cli, cliArgs = [], path: target } = opts;
-  if (!target) return { ok: false, error: 'No path provided' };
+  if (typeof target !== 'string' || !path.isAbsolute(target)) {
+    return { ok: false, error: 'Invalid path (must be absolute)' };
+  }
+  const flags = (Array.isArray(cliArgs) ? cliArgs : []).filter(a => typeof a === 'string' && IDE_SAFE_FLAGS.has(a));
+
   let res;
   if (cli) {
-    res = await run(cli, [...cliArgs, target]);          // e.g. code -r <path>
+    const bin = path.basename(String(cli)).toLowerCase();   // resolve via PATH, ignore any dir
+    if (!IDE_CLI_ALLOW.has(bin)) return { ok: false, error: `IDE not allowed: ${bin}` };
+    res = await run(bin, [...flags, '--', target]);          // e.g. code -r -- <path>
   } else if (appName) {
-    res = await run('open', ['-a', appName, target]);     // e.g. JetBrains via `open -a`
+    if (!IDE_APP_ALLOW.has(String(appName).toLowerCase())) return { ok: false, error: `IDE not allowed: ${appName}` };
+    res = await run('open', ['-a', String(appName), target]); // absolute target can't be a flag
   } else {
     res = await run('open', [target]);
   }

@@ -95,30 +95,57 @@ app.include_router(guides_router)
 
 # ── IDE integration ──
 
+# IDE invocations the renderer is allowed to request. The body comes from the
+# UI (which renders untrusted Asana content), so we never run an arbitrary
+# binary: the CLI/app must be a known IDE, the binary is resolved by basename
+# from PATH, args are restricted to safe window flags, and the path must be
+# absolute (so it can't be parsed as an option). This container also mounts the
+# Docker socket and SSH keys, so binary execution here is not a sandbox.
+_IDE_CLI_ALLOW = {
+    "code", "code-insiders", "cursor", "codium", "vscodium", "subl", "zed", "windsurf",
+    "idea", "pycharm", "phpstorm", "webstorm", "rubymine", "goland", "clion", "rider", "fleet",
+    "nvim", "vim", "emacs",
+}
+_IDE_APP_ALLOW = {
+    "phpstorm", "webstorm", "pycharm", "pycharm professional edition", "pycharm community edition",
+    "intellij idea", "intellij idea ultimate", "intellij idea community edition",
+    "rubymine", "goland", "clion", "rider", "fleet",
+    "visual studio code", "vscodium", "cursor", "zed", "sublime text", "windsurf",
+}
+_IDE_SAFE_FLAGS = {"-r", "-n", "-g", "-w", "--reuse-window", "--new-window", "--wait"}
+
+
 @app.post("/api/ide/open")
 async def open_in_ide(body: dict):
     """Open a path in a desktop IDE via macOS `open -a` or CLI command."""
     import subprocess as _sp
+    import os as _os
     from fastapi import HTTPException as _HTTPException
     app_name = body.get("app", "")
     cli = body.get("cli", "")
-    cli_args = body.get("cliArgs", [])
+    cli_args = body.get("cliArgs", []) or []
     path = body.get("path", "")
     if (not app_name and not cli) or not path:
         raise _HTTPException(400, "app or cli, and path are required")
-    # Validate path exists
-    import os as _os
+    if not _os.path.isabs(path):
+        raise _HTTPException(400, "path must be absolute")
     real_path = _os.path.realpath(path)
     if not _os.path.exists(real_path):
         raise _HTTPException(404, f"Path not found: {path}")
+
+    flags = [a for a in cli_args if isinstance(a, str) and a in _IDE_SAFE_FLAGS]
     try:
         if cli:
-            # CLI-based IDEs (VS Code, Cursor) — supports -r to reuse window
-            cmd = [cli] + (cli_args or []) + [real_path]
-            _sp.Popen(cmd)
+            binary = _os.path.basename(str(cli)).lower()   # resolve via PATH, drop any dir
+            if binary not in _IDE_CLI_ALLOW:
+                raise _HTTPException(400, f"IDE not allowed: {binary}")
+            _sp.Popen([binary, *flags, "--", real_path])
         else:
-            # macOS `open -a` for JetBrains IDEs (naturally reuses existing window)
-            _sp.Popen(["open", "-a", app_name, real_path])
+            if str(app_name).lower() not in _IDE_APP_ALLOW:
+                raise _HTTPException(400, f"IDE not allowed: {app_name}")
+            _sp.Popen(["open", "-a", str(app_name), real_path])
+    except _HTTPException:
+        raise
     except Exception as e:
         raise _HTTPException(500, f"Failed to open IDE: {e}")
     return {"status": "ok"}
