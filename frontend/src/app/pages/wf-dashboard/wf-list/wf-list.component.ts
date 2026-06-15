@@ -53,7 +53,13 @@ export interface WfAction {
           </div>
 
           <div class="wf-row-repo">
-            <span class="wf-row-r1 wf-mono">{{ task.repo }}</span>
+            <span class="wf-row-r1 wf-mono" [title]="reposTitle(task)">
+              {{ reposLabel(task) }}
+              @if (task.repos.length > 1) {
+                <span title="Cross-repo task: {{ reposTitle(task) }}"
+                  style="margin-left:4px; padding:0 4px; border-radius:6px; font-size:9px; font-weight:700; background:var(--wf-accent,#5b8cff); color:#fff; vertical-align:middle">×{{ task.repos.length }}</span>
+              }
+            </span>
             <span class="wf-row-r2 wf-mono">{{ shortBranch(task) }}</span>
           </div>
 
@@ -134,6 +140,15 @@ export class WfListComponent {
   shortBranch(task: WfTask): string {
     if (task.branch === '—') return '—';
     return task.branch.replace(`feature/${task.gid}/`, '…/');
+  }
+
+  /** First repo id (compact). Full list is in the tooltip / ×N badge. */
+  reposLabel(task: WfTask): string {
+    return task.repos.length ? task.repos[0] : task.repo;
+  }
+
+  reposTitle(task: WfTask): string {
+    return task.repos.length ? task.repos.join(', ') : task.repo;
   }
 
   emitAction(event: Event, gid: string, act: string): void {

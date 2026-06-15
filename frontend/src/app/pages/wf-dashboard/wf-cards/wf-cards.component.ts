@@ -57,6 +57,10 @@ import { WfAction } from '../wf-list/wf-list.component';
             @if (task.branch !== '—') {
               <div class="wf-card-branch wf-mono">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M6 9v6M6 18a9 9 0 0 0 9-9v3"/></svg>
+                @if (task.repos.length > 1) {
+                  <span title="Cross-repo task: {{ task.repos.join(', ') }}"
+                    style="margin-right:5px; padding:0 4px; border-radius:6px; font-size:9px; font-weight:700; background:var(--wf-accent,#5b8cff); color:#fff">{{ task.repos.length }} repos</span>
+                }
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ shortBranch(task) }}</span>
               </div>
             }
