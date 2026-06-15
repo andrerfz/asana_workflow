@@ -150,6 +150,8 @@ export class TaskDetailPage implements OnInit {
   trackByTs(_: number, entry: { timestamp: string }): string { return entry.timestamp; }
   trackByRepo(_: number, repo: RepoEntry): string { return repo.id; }
 
+  openMr(url: string): void { window.open(url, '_blank'); }
+
   private async showToast(message: string, color: string): Promise<void> {
     const toast = await this.toastCtrl.create({ message, color, duration: 2500, position: 'bottom' });
     await toast.present();

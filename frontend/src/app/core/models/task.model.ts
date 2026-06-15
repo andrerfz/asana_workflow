@@ -52,6 +52,7 @@ export interface RepoEntry {
   worktree_path?: string;
   default_branch?: string;
   branch?: string;
+  mr_url?: string | null;
 }
 
 export interface AgentRun {

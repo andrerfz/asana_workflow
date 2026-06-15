@@ -55,7 +55,8 @@ export interface WfTask {
   branch_slug: string;  // last segment of the git branch name
   repo: string;         // first repo id (back-compat)
   repos: string[];      // ALL repo ids in the run (cross-repo tasks have >1)
-  mr_url: string | null;
+  mr_url: string | null;   // first repo's MR (back-compat)
+  mrUrls: string[];        // MR links for ALL repos that have one
   log: [string, string, string][];  // [time, level, message]
   progress: number;
 }
@@ -86,7 +87,8 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     branch_slug: (firstRepo?.branch ?? '').split('/').pop() ?? '',
     repo: firstRepo?.id ?? '—',
     repos: (run?.repos ?? []).map(r => r.id),
-    mr_url: (firstRepo as any)?.mr_url ?? null,
+    mr_url: firstRepo?.mr_url ?? null,
+    mrUrls: (run?.repos ?? []).map(r => r.mr_url).filter((u): u is string => !!u),
     log: (run?.logs ?? []).map(l => [
       new Date(l.timestamp).toLocaleTimeString('en-GB', { hour12: false }).slice(0, 8),
       l.level.toUpperCase(),

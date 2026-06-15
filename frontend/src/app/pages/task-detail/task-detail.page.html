@@ -149,6 +149,14 @@
           (click)="loadDiff(repo.id)">
           {{ loadingDiffs()[repo.id] ? 'Loading...' : 'Load diff' }}
         </ion-button>
+        <ion-button
+          *ngIf="repo.mr_url"
+          size="small"
+          fill="outline"
+          color="primary"
+          (click)="openMr(repo.mr_url!)">
+          Open MR ↗
+        </ion-button>
       </div>
       <pre *ngIf="diffMap()[repo.id]" class="diff-pre">
         <span

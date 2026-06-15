@@ -604,9 +604,10 @@ export class WfDashboardPage implements OnInit {
         break;
       case 'open_pr': {
         const task = this.allWfTasks().find(t => t.gid === gid);
-        const url = task?.mr_url;
-        if (url) {
-          window.open(url, '_blank');
+        // Open the MR of every repo in the run (cross-repo tasks have >1).
+        const urls = task?.mrUrls?.length ? task.mrUrls : (task?.mr_url ? [task.mr_url] : []);
+        if (urls.length) {
+          urls.forEach(url => window.open(url, '_blank'));
         } else {
           this.flash('No MR link available yet', 'var(--wf-amber)');
         }
