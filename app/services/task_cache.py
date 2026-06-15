@@ -115,6 +115,10 @@ def _apply_overrides(result: dict, overrides: dict, gid: str) -> dict:
             result["priority"] = ov["priority"]
         if "area" in ov:
             result["area"] = ov["area"]
+        # Plural areas (cross-repo). Older overrides lack it; keep the
+        # rule-based areas from classify_task in that case.
+        if ov.get("areas"):
+            result["areas"] = ov["areas"]
         if "ai_reasoning" in ov:
             result["ai_reasoning"] = ov["ai_reasoning"]
         if "ai_summary" in ov:

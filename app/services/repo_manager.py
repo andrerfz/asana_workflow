@@ -191,15 +191,22 @@ def check_repo_health(path: str) -> dict:
     return result
 
 
-def get_repos_for_area(area: str) -> list[dict]:
-    """Get repo configs mapped to a classifier area.
+def get_repos_for_areas(areas: list[str]) -> list[dict]:
+    """Get repo configs mapped to one or more classifier areas (deduped union).
 
-    Falls back to the first configured repo if the area isn't mapped,
-    so tasks with area='other' or unmapped areas can still be started.
+    A task spanning several areas (cross-repo) resolves to every mapped repo,
+    so multiple worktrees/agents are created from the start. Falls back to the
+    first configured repo if nothing maps, so tasks with area='other' or
+    unmapped areas can still be started.
     """
     data = load_repos()
     mapping = data.get("area_repo_map", AREA_REPO_MAP)
-    repo_ids = mapping.get(area, [])
+
+    repo_ids: list[str] = []
+    for area in areas:
+        for rid in mapping.get(area, []):
+            if rid not in repo_ids:
+                repo_ids.append(rid)
 
     result = []
     for rid in repo_ids:
@@ -207,13 +214,18 @@ def get_repos_for_area(area: str) -> list[dict]:
         if repo:
             result.append({**repo, "id": rid})
 
-    # Fallback: if no repos mapped for this area, return the first configured repo
+    # Fallback: nothing mapped → return the first configured repo
     if not result and data["repos"]:
         first_id, first_repo = next(iter(data["repos"].items()))
-        log.warning("Area '%s' not in mapping — falling back to first repo: %s", area, first_id)
+        log.warning("Areas %s not in mapping — falling back to first repo: %s", areas, first_id)
         result.append({**first_repo, "id": first_id})
 
     return result
+
+
+def get_repos_for_area(area: str) -> list[dict]:
+    """Get repo configs mapped to a single classifier area (back-compat shim)."""
+    return get_repos_for_areas([area])
 
 
 def load_task_repo_overrides() -> dict:
@@ -268,9 +280,12 @@ def get_repos_for_task(task: dict) -> list[dict]:
                 result.append({**repo, "id": rid})
         return result
 
-    # Fallback to area auto-mapping
-    area = task.get("area", "other")
-    return get_repos_for_area(area)
+    # Fallback to area auto-mapping. Prefer plural `areas` (cross-repo tasks
+    # map to multiple repos); fall back to the single `area` for older data.
+    areas = task.get("areas") or []
+    if not areas:
+        areas = [task.get("area", "other")]
+    return get_repos_for_areas(areas)
 
 
 def update_area_mapping(area: str, repo_ids: list[str]):

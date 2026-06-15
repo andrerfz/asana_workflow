@@ -51,9 +51,10 @@ export interface WfTask {
   qa_report?: string;
   cost: number;
   model: string | null;  // model that executed the run (badge)
-  branch: string;       // worktree_path
+  branch: string;       // worktree_path of the first repo
   branch_slug: string;  // last segment of the git branch name
-  repo: string;
+  repo: string;         // first repo id (back-compat)
+  repos: string[];      // ALL repo ids in the run (cross-repo tasks have >1)
   mr_url: string | null;
   log: [string, string, string][];  // [time, level, message]
   progress: number;
@@ -84,6 +85,7 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     branch: firstRepo?.worktree_path ?? '—',
     branch_slug: (firstRepo?.branch ?? '').split('/').pop() ?? '',
     repo: firstRepo?.id ?? '—',
+    repos: (run?.repos ?? []).map(r => r.id),
     mr_url: (firstRepo as any)?.mr_url ?? null,
     log: (run?.logs ?? []).map(l => [
       new Date(l.timestamp).toLocaleTimeString('en-GB', { hour12: false }).slice(0, 8),

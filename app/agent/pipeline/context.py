@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..state import load_run_history
 from ..memory import get_memory_context
-from ...services.repo_manager import get_repo, list_repos
+from ...services.repo_manager import get_repo, list_repos, load_repos, AREA_REPO_MAP
 
 log = logging.getLogger(__name__)
 
@@ -114,13 +114,32 @@ def parse_additional_repos(investigation: str, run: dict) -> list[str]:
 
     log.info("ADDITIONAL_REPOS line found: %s", match.group().strip())
     requested = [r.strip() for r in match.group(1).split(",") if r.strip()]
+
+    # Tolerate near-misses: exact repo id, case-insensitive id, or an area name
+    # (e.g. "backend_proveedor") that maps to one or more repos.
+    ci_ids = {rid.lower(): rid for rid in all_repo_ids}
+    area_map = load_repos().get("area_repo_map", AREA_REPO_MAP)
+
+    def _resolve(token: str) -> list[str]:
+        if token in all_repo_ids:
+            return [token]
+        if token.lower() in ci_ids:
+            return [ci_ids[token.lower()]]
+        if token in area_map:  # an area name → its repo ids
+            return [rid for rid in area_map[token] if rid in all_repo_ids]
+        return []
+
     valid = []
-    for repo_id in requested:
-        if repo_id in existing_ids:
-            log.info("Additional repo %s already assigned — skipping", repo_id)
+    for token in requested:
+        resolved = _resolve(token)
+        if not resolved:
+            log.warning("Investigation requested unknown repo: %s (available: %s)", token, all_repo_ids)
             continue
-        if repo_id not in all_repo_ids:
-            log.warning("Investigation requested unknown repo: %s (available: %s)", repo_id, all_repo_ids)
-            continue
-        valid.append(repo_id)
+        for repo_id in resolved:
+            if repo_id in existing_ids:
+                log.info("Additional repo %s already assigned — skipping", repo_id)
+                continue
+            if repo_id in valid:
+                continue
+            valid.append(repo_id)
     return valid

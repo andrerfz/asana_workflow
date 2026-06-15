@@ -111,25 +111,44 @@ def _project_names(task: dict) -> list[str]:
     ]
 
 
-def _area_from_projects(task: dict) -> Optional[str]:
-    """Area implied by the task's Asana project memberships, if unambiguous."""
-    areas = set()
+def _areas_from_projects(task: dict) -> list[str]:
+    """All areas implied by the task's Asana project memberships, in order."""
+    areas: list[str] = []
     for name in _project_names(task):
         for pattern, area in PROJECT_AREA_PATTERNS:
-            if re.search(pattern, name, re.IGNORECASE):
-                areas.add(area)
-    return areas.pop() if len(areas) == 1 else None
+            if re.search(pattern, name, re.IGNORECASE) and area not in areas:
+                areas.append(area)
+    return areas
+
+
+def _area_from_projects(task: dict) -> Optional[str]:
+    """Area implied by the task's project memberships, only if unambiguous."""
+    areas = _areas_from_projects(task)
+    return areas[0] if len(areas) == 1 else None
 
 
 def _apply_area_override(task: dict, result: Optional[dict]) -> Optional[dict]:
     """
-    If the task's project memberships unambiguously imply an area and the AI
-    picked a different backend area, trust the project. Applied to cached
-    results too, since the cache key doesn't include memberships.
+    Reconcile the AI's single text-based area guess with the task's Asana
+    project memberships (the authoritative signal). Always sets a plural
+    `areas` so cross-repo tasks fan out to every backend they belong to.
+    Applied to cached results too, since the cache key omits memberships.
     """
     if not result:
         return result
-    project_area = _area_from_projects(task)
+    project_areas = _areas_from_projects(task)
+
+    # Cross-repo: the task lives in several backend projects → carry them all.
+    if len(project_areas) > 1:
+        primary = result.get("area") if result.get("area") in project_areas else project_areas[0]
+        log.warning(
+            "Cross-repo task '%s': projects %s imply areas %s (AI said %s)",
+            task.get("name", "?")[:60], _project_names(task), project_areas, result.get("area"),
+        )
+        return {**result, "area": primary, "areas": project_areas}
+
+    # Single unambiguous project → trust it over the AI's text guess.
+    project_area = project_areas[0] if len(project_areas) == 1 else None
     ai_area = result.get("area")
     if project_area and ai_area != project_area and ai_area not in ("mobile_app", "monitoring"):
         log.warning(
@@ -137,7 +156,10 @@ def _apply_area_override(task: dict, result: Optional[dict]) -> Optional[dict]:
             task.get("name", "?")[:60], ai_area, _project_names(task), project_area,
         )
         result = {**result, "area": project_area, "area_overridden_from": ai_area}
-    return result
+
+    # Normalize: single-area tasks still expose `areas` for uniform handling.
+    final_area = result.get("area")
+    return {**result, "areas": [final_area] if final_area else []}
 
 
 def _build_task_prompt(task: dict, extra_context: str = "") -> str:
