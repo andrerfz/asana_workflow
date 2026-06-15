@@ -251,9 +251,13 @@ const BUSY_ACTIONS: Record<string, number> = {
                         @if (ph.id === 'done') {
                           <div class="wf-d-card is-ok">
                             <div class="wf-d-card-h" style="color:var(--wf-green)">Shipped</div>
-                            <p>Branch: <span class="wf-mono">{{ task()!.branch }}</span></p>
+                            <p>Branch: <span class="wf-mono">{{ task()!.branch_slug || task()!.branch }}</span></p>
                             <div class="wf-d-acts">
-                              <button class="wf-btn wf-btn-go" [disabled]="!task()!.mr_url" (click)="action.emit('open_pr')">{{ task()!.mr_url ? "Open MR ↗" : "MR not created yet" }}</button>
+                              @for (rm of task()!.repoMrs; track rm.id) {
+                                <button class="wf-btn wf-btn-go" [disabled]="!rm.mr_url" (click)="rm.mr_url && openMr(rm.mr_url)">
+                                  {{ rm.mr_url ? ('MR · ' + rm.id + ' ↗') : ('No MR · ' + rm.id) }}
+                                </button>
+                              }
                               <button class="wf-btn" (click)="action.emit('run_qa')">Run QA</button>
                               <button class="wf-btn" (click)="action.emit('rerun')">Re-run</button>
                             </div>
@@ -282,8 +286,8 @@ const BUSY_ACTIONS: Record<string, number> = {
           @if (task()!.phase !== 'queued') {
             <div class="wf-d-card-h" style="margin-top:14px; padding-left:0">Run state</div>
             <div class="wf-d-kv">
-              <span class="wf-d-kv-k">Repo</span>
-              <span class="wf-d-kv-v wf-mono">{{ task()!.repo }}</span>
+              <span class="wf-d-kv-k">{{ task()!.repos.length > 1 ? 'Repos' : 'Repo' }}</span>
+              <span class="wf-d-kv-v wf-mono">{{ task()!.repos.length ? task()!.repos.join(', ') : task()!.repo }}</span>
               <span class="wf-d-kv-k">Branch</span>
               <span class="wf-d-kv-v wf-mono" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ task()!.branch }}</span>
               <span class="wf-d-kv-k">Cost</span>
@@ -330,6 +334,8 @@ export class WfDrawerComponent {
 
   phases = WF_PHASES;
   modelLabel = modelLabel;
+
+  openMr(url: string): void { window.open(url, '_blank'); }
 
   onResizeStart(e: MouseEvent): void {
     e.preventDefault();

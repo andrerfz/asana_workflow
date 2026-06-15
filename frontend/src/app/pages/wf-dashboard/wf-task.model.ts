@@ -57,6 +57,7 @@ export interface WfTask {
   repos: string[];      // ALL repo ids in the run (cross-repo tasks have >1)
   mr_url: string | null;   // first repo's MR (back-compat)
   mrUrls: string[];        // MR links for ALL repos that have one
+  repoMrs: { id: string; mr_url: string | null }[];  // per-repo id + MR link
   log: [string, string, string][];  // [time, level, message]
   progress: number;
 }
@@ -89,6 +90,7 @@ export function toWfTask(task: Task, run?: AgentRun): WfTask {
     repos: (run?.repos ?? []).map(r => r.id),
     mr_url: firstRepo?.mr_url ?? null,
     mrUrls: (run?.repos ?? []).map(r => r.mr_url).filter((u): u is string => !!u),
+    repoMrs: (run?.repos ?? []).map(r => ({ id: r.id, mr_url: r.mr_url ?? null })),
     log: (run?.logs ?? []).map(l => [
       new Date(l.timestamp).toLocaleTimeString('en-GB', { hour12: false }).slice(0, 8),
       l.level.toUpperCase(),
