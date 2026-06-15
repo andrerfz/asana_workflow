@@ -110,21 +110,37 @@ PROJECT_AREA_PATTERNS = [
 ]
 
 
-def detect_area(name: str, task: Optional[dict] = None) -> str:
-    """Detect functional area. Project memberships win over name prefix."""
+def detect_areas(name: str, task: Optional[dict] = None) -> list[str]:
+    """Detect ALL functional areas a task spans, in priority order.
+
+    Project memberships are authoritative: a task that belongs to several
+    backend projects (e.g. "Back Clientes" + "Back Proveedores") legitimately
+    spans multiple repos, so we return every implied area instead of collapsing
+    to one. Order follows membership order, deduplicated. Falls back to the
+    task-name prefix, then [] if nothing matches.
+    """
     if task:
-        areas = set()
+        areas: list[str] = []
         for m in task.get("memberships", []):
             proj_name = (m.get("project") or {}).get("name", "")
             for pattern, area in PROJECT_AREA_PATTERNS:
-                if re.search(pattern, proj_name, re.IGNORECASE):
-                    areas.add(area)
-        if len(areas) == 1:
-            return areas.pop()
+                if re.search(pattern, proj_name, re.IGNORECASE) and area not in areas:
+                    areas.append(area)
+        if areas:
+            return areas
     for pattern, area in AREA_PATTERNS:
         if re.search(pattern, name):
-            return area
-    return "other"
+            return [area]
+    return []
+
+
+def detect_area(name: str, task: Optional[dict] = None) -> str:
+    """Primary functional area (first of detect_areas). 'other' if none.
+
+    Kept for display/back-compat; repo resolution uses the plural areas.
+    """
+    areas = detect_areas(name, task)
+    return areas[0] if areas else "other"
 
 
 def compute_scope_score(task: dict) -> int:
@@ -274,7 +290,8 @@ def classify_task(task: dict) -> dict:
     notes = task.get("notes") or ""
 
     cluster = detect_cluster(name, notes)
-    area = detect_area(name, task)
+    areas = detect_areas(name, task)
+    area = areas[0] if areas else "other"
     scope = compute_scope_score(task)
     priority = compute_priority(task, cluster, scope)
 
@@ -296,6 +313,7 @@ def classify_task(task: dict) -> dict:
         "name": name,
         "cluster": cluster,
         "area": area,
+        "areas": areas,
         "scope_score": scope,
         "priority": priority,
         "tipo": _get_custom_field(task, "Tipo") or "N/A",
