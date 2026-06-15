@@ -33,7 +33,13 @@ RUN mkdir -p /app/data
 # UID 501 matches default macOS user for seamless file permissions on mounted volumes
 ARG HOST_UID=501
 RUN useradd -m -s /bin/bash -u ${HOST_UID} agent && \
-    chown -R agent:agent /app /app/data
+    # Pre-create the Claude config dir owned by agent so the `claude-config`
+    # named volume (mounted here in compose) inherits agent ownership when first
+    # created — Docker seeds a new volume's owner/perms from this image path.
+    # Without this the fresh volume is root:root and the CLI's Bash tool fails
+    # with EACCES on mkdir ~/.claude/session-env.
+    mkdir -p /home/agent/.claude && \
+    chown -R agent:agent /app /app/data /home/agent/.claude
 
 USER agent
 

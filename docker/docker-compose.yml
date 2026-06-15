@@ -21,8 +21,17 @@ services:
       - ../tests:/app/tests
       # Agent feature: mount projects dir at same path so IDE paths match
       - ${PROJECTS_DIR}:${PROJECTS_DIR}
-      # Claude Code CLI config — NOT read-only: CLI needs to write session/cache data
-      - ~/.claude:/home/agent/.claude
+      # Claude Code CLI config dir — a NAMED VOLUME, not a host bind mount.
+      # The CLI's Bash tool writes a fresh ~/.claude/session-env/<uuid> dir on
+      # every invocation. On a virtiofs host bind mount (OrbStack), that churn
+      # eventually breaks the mount's inode mapping: the whole dir then returns
+      # ENOENT inside the container and every Bash call dies on
+      #   mkdir '/home/agent/.claude/session-env/<uuid>'  (ENOENT).
+      # A named volume lives on ext4 in the OrbStack VM — immune to that break,
+      # persists across restarts (session resume), and keeps the container's
+      # high-churn session data off the host (no more ~/.claude/session-env spam).
+      # .claude.json is still seeded from the host via the entrypoint copy below.
+      - claude-config:/home/agent/.claude
       - ~/.claude.json:/run/host-claude.json:ro
       # SSH keys for git fetch/push over SSH
       - ~/.ssh:/home/agent/.ssh:ro
@@ -32,3 +41,9 @@ services:
     group_add:
       - "${DOCKER_GID:-0}"
     restart: unless-stopped
+
+volumes:
+  # Persistent, inode-break-immune store for the Claude Code CLI config dir
+  # (~/.claude). See the mount comment above for why this is a named volume
+  # rather than a bind mount of the host's ~/.claude.
+  claude-config:
