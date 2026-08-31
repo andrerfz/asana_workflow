@@ -232,6 +232,29 @@ import { WfHistoryComponent } from './wf-history/wf-history.component';
         </div>
       }
 
+      <!-- ── IDE CREATE-WORKTREE PROJECT PICKER (classification unclear) ── -->
+      @if (ideCreateRepoOverlay()) {
+        <div class="wf-branch-overlay" (click)="ideCreateRepoOverlay.set(null)">
+          <div class="wf-branch-panel" (click)="$event.stopPropagation()">
+            <div class="wf-branch-head">
+              <span>Which project is this task for?</span>
+              <button class="wf-btn wf-btn-icon" (click)="ideCreateRepoOverlay.set(null)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="wf-branch-section">
+              <div class="wf-branch-section-lbl">Couldn't tell automatically — pick where to create the worktree</div>
+              @for (repo of ideCreateRepoOverlay()!.repos; track repo.id) {
+                <button class="wf-branch-slug-btn" (click)="pickIdeCreateRepo(repo.id)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>{{ repo.id }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- ── GUIDE OVERLAY ── -->
       @if (guideOverlay()) {
         <div class="wf-branch-overlay" (click)="guideClose()">
@@ -315,6 +338,11 @@ export class WfDashboardPage implements OnInit {
 
   // IDE repo selector (shown when task has multiple repos)
   ideRepoOverlay = signal<{ gid: string; repos: { id: string; path: string; branch: string }[] } | null>(null);
+
+  // Project picker shown when no worktree exists yet and classification
+  // couldn't confidently name a single repo — the user decides instead of
+  // silently defaulting to some repo.
+  ideCreateRepoOverlay = signal<{ gid: string; slug: string; repos: { id: string }[] } | null>(null);
 
   // Inline guide overlay
   guideOverlay = signal<{ gid: string } | null>(null);
@@ -624,19 +652,6 @@ export class WfDashboardPage implements OnInit {
   }
 
   private async _openIde(gid: string): Promise<void> {
-    const ideId = localStorage.getItem('wf-ide') ?? 'vscode';
-    const ideCustomPath = localStorage.getItem('wf-ide-path') ?? '';
-
-    // URL-scheme IDEs open directly from the browser — no server needed.
-    // This bypasses Docker's missing `open` command entirely.
-    const urlSchemes: Record<string, string> = {
-      phpstorm: `phpstorm://open?file=`,
-      webstorm: `webstorm://open?file=`,
-      idea:     `idea://open?file=`,
-      vscode:   `vscode://file/`,
-      cursor:   `cursor://file/`,
-    };
-
     // Multi-repo: show selector if more than one repo has a worktree
     const run = this.stateService.getRunForTask(gid);
     const allRepos = (run?.repos ?? []).filter(r => r.worktree_path);
@@ -664,35 +679,80 @@ export class WfDashboardPage implements OnInit {
     }
 
     if (!path) {
-      this.flash('No worktree — creating one…');
+      // Get task to find repos
+      const task = this.stateService.tasks().find((t: any) => t.task_gid === gid);
+      if (!task) { this.flash('Task not found', 'var(--wf-red)'); return; }
+
+      // Generate branch name
+      const branchRes = await firstValueFrom(this.api.getBranchName(gid));
+      const slug = branchRes?.branch?.split('/').pop() ?? gid.slice(-8);
+
+      // Resolve the repo from the task's classification, not just "whichever
+      // repo happens to be first" — that silently created every worktree in
+      // the same repo regardless of what the task was actually for.
+      let resolved: { repo_ids: string[]; confident: boolean; all_repos: { id: string; path: string }[] };
       try {
-        // Get task to find repos
-        const task = this.stateService.tasks().find((t: any) => t.task_gid === gid);
-        if (!task) { this.flash('Task not found', 'var(--wf-red)'); return; }
-
-        // Generate branch name
-        const branchRes = await firstValueFrom(this.api.getBranchName(gid));
-        const slug = branchRes?.branch?.split('/').pop() ?? gid.slice(-8);
-
-        // Find first repo for this task (from area mapping or default)
-        const reposRes = await firstValueFrom(this.api.getRepos());
-        const repo = reposRes?.[0];
-        if (!repo) { this.flash('No repos configured', 'var(--wf-red)'); return; }
-
-        // Create worktree from latest master
-        const wt = await firstValueFrom(
-          this.http.post<{ path: string }>(`/api/worktrees/${gid}`, {
-            repo_id: repo.id,
-            branch_slug: slug,
-          })
-        );
-        path = wt.path;
-        this.flash(`Worktree created: ${slug}`);
+        resolved = await firstValueFrom(this.api.getReposForTask(gid));
       } catch (e: any) {
-        this.flash(e?.error?.detail || 'Failed to create worktree', 'var(--wf-red)');
+        this.flash(e?.error?.detail || 'Failed to resolve repo for task', 'var(--wf-red)');
         return;
       }
+
+      if (!resolved.confident) {
+        // Classification is unclear (no match, or spans several repos) —
+        // let the user pick instead of guessing.
+        if (!resolved.all_repos?.length) { this.flash('No repos configured', 'var(--wf-red)'); return; }
+        this.ideCreateRepoOverlay.set({ gid, slug, repos: resolved.all_repos.map(r => ({ id: r.id })) });
+        return;
+      }
+
+      path = await this._createWorktree(gid, resolved.repo_ids[0], slug) ?? undefined;
+      if (!path) return;
     }
+
+    this._openIdeAtPath(path);
+  }
+
+  /** Creates a worktree for a repo, remembering the choice for next time. Returns the new path, or undefined on failure. */
+  private async _createWorktree(gid: string, repoId: string, slug: string): Promise<string | undefined> {
+    this.flash('No worktree — creating one…');
+    try {
+      const wt = await firstValueFrom(
+        this.http.post<{ path: string }>(`/api/worktrees/${gid}`, {
+          repo_id: repoId,
+          branch_slug: slug,
+        })
+      );
+      this.flash(`Worktree created: ${slug}`);
+      return wt.path;
+    } catch (e: any) {
+      this.flash(e?.error?.detail || 'Failed to create worktree', 'var(--wf-red)');
+      return undefined;
+    }
+  }
+
+  /** User picked a project from the ambiguous-classification overlay: persist it and continue. */
+  async pickIdeCreateRepo(repoId: string): Promise<void> {
+    const overlay = this.ideCreateRepoOverlay();
+    if (!overlay) return;
+    this.ideCreateRepoOverlay.set(null);
+    try {
+      await firstValueFrom(this.api.updateTaskRepos(overlay.gid, [repoId]));
+    } catch { /* worktree creation below still proceeds even if saving the override fails */ }
+    const path = await this._createWorktree(overlay.gid, repoId, overlay.slug);
+    if (path) this._openIdeAtPath(path);
+  }
+
+  private _openIdeAtPath(path: string): void {
+    const ideId = localStorage.getItem('wf-ide') ?? 'vscode';
+    const ideCustomPath = localStorage.getItem('wf-ide-path') ?? '';
+    const urlSchemes: Record<string, string> = {
+      phpstorm: `phpstorm://open?file=`,
+      webstorm: `webstorm://open?file=`,
+      idea:     `idea://open?file=`,
+      vscode:   `vscode://file/`,
+      cursor:   `cursor://file/`,
+    };
 
     // Open using URL scheme (works from browser on host regardless of Docker)
     const scheme = urlSchemes[ideId];

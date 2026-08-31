@@ -86,6 +86,10 @@ export class ApiService {
     return this.http.put(`/api/repos/mapping/areas/${encodeURIComponent(area)}`, { repo_ids: repoIds });
   }
 
+  getReposForTask(gid: string): Observable<{ repo_ids: string[]; confident: boolean; source: string; all_repos: { id: string; path: string }[] }> {
+    return this.http.get<{ repo_ids: string[]; confident: boolean; source: string; all_repos: { id: string; path: string }[] }>(`/api/repos/for-task/${gid}`);
+  }
+
   getAgentSettings(): Observable<AgentSettings> {
     return this.http.get<AgentSettings>('/api/agent/settings');
   }

@@ -68,6 +68,48 @@ async def get_area_mapping():
     return {"area_repo_map": data.get("area_repo_map", {})}
 
 
+@router.get("/for-task/{task_gid}")
+async def get_repos_for_task_endpoint(task_gid: str):
+    """Resolve which repo(s) a task's classification points to.
+
+    Used by the "open in IDE" flow to decide whether a worktree can be
+    created automatically (classification confidently names exactly one
+    repo, or the user already overrode it) or whether the classification is
+    unclear/ambiguous and the user should be asked to pick the project
+    themselves instead of silently defaulting to some repo.
+    """
+    from ..services.task_cache import get_cached_tasks
+    from ..services.repo_manager import get_task_repo_override
+
+    tasks, _ = get_cached_tasks()
+    task = next((t for t in tasks if t["task_gid"] == task_gid), None)
+    if not task:
+        raise HTTPException(404, f"Task {task_gid} not found in cache")
+
+    data = load_repos()
+    all_repos = [{"id": rid, "path": r.get("path", "")} for rid, r in data["repos"].items()]
+
+    override = get_task_repo_override(task_gid)
+    if override:
+        repo_ids = [rid for rid in override if rid in data["repos"]]
+        return {"repo_ids": repo_ids, "confident": bool(repo_ids), "source": "override", "all_repos": all_repos}
+
+    mapping = data.get("area_repo_map", {})
+    areas = task.get("areas") or ([task["area"]] if task.get("area") else [])
+    repo_ids: list[str] = []
+    for area in areas:
+        for rid in mapping.get(area, []):
+            if rid not in repo_ids:
+                repo_ids.append(rid)
+
+    return {
+        "repo_ids": repo_ids,
+        "confident": len(repo_ids) == 1,
+        "source": "classification" if repo_ids else "none",
+        "all_repos": all_repos,
+    }
+
+
 @router.put("/mapping/areas/{area}")
 async def set_area_mapping(area: str, body: AreaMapping):
     """Update area-to-repo mapping for a specific area."""

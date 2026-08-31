@@ -1,4 +1,4 @@
-.PHONY: help build up down restart recreate logs shell clean dev dev-ui setup setup-agent test frontend electron-start electron-build electron-install install-hooks
+.PHONY: help build up down restart recreate logs shell clean dev dev-ui setup setup-agent test frontend reload electron-start electron-build electron-install install-hooks
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -83,6 +83,22 @@ frontend: ## Build Angular/Ionic frontend (outputs to app/static/)
 	@echo ""
 	@echo "\033[1;32m  Frontend built → app/static/\033[0m"
 	@echo "\033[1;32m  Restart FastAPI to serve new build.\033[0m"
+	@echo ""
+
+reload: ## After code changes: rebuild frontend, restart backend, clear Electron's disk cache
+	cd frontend && npm run build
+	docker compose -f docker/docker-compose.yml --env-file .env restart
+	@osascript -e 'quit app "Asana Workflow"' 2>/dev/null || true
+	@sleep 1
+	@rm -rf "$(HOME)/Library/Application Support/asana-workflow-desktop/Cache" \
+	        "$(HOME)/Library/Application Support/asana-workflow-desktop/Code Cache" \
+	        "$(HOME)/Library/Application Support/asana-workflow-desktop/GPUCache" \
+	        "$(HOME)/Library/Application Support/asana-workflow-desktop/DawnGraphiteCache" \
+	        "$(HOME)/Library/Application Support/asana-workflow-desktop/DawnWebGPUCache" \
+	        "$(HOME)/Library/Application Support/asana-workflow-desktop/Shared Dictionary"
+	@echo ""
+	@echo "\033[1;32m  Frontend rebuilt, backend restarted, Electron cache cleared.\033[0m"
+	@echo "\033[1;32m  Reopen the desktop app (or hard-refresh the browser tab).\033[0m"
 	@echo ""
 
 electron-start: ## Run desktop app (FastAPI + Electron window)
